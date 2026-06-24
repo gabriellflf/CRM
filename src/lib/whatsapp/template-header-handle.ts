@@ -29,7 +29,7 @@ export async function ensureImageHeaderHandle(
   const appId = process.env.META_APP_ID
   if (!appId) {
     throw new Error(
-      'Image-header templates need META_APP_ID set (used for Meta's Resumable Upload). Add it to your environment, or remove the image header.',
+      'Image-header templates need META_APP_ID set (used for Meta\'s Resumable Upload). Add it to your environment, or remove the image header.',
     )
   }
 
