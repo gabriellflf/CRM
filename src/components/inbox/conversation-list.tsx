@@ -39,11 +39,11 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
 type InboxFilter = ConversationStatus | "all" | "unread";
 
 const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = [
-  { label: "All", value: "all" },
-  { label: "Unread", value: "unread" },
-  { label: "Open", value: "open" },
-  { label: "Pending", value: "pending" },
-  { label: "Closed", value: "closed" },
+  { label: "Todos", value: "all" },
+  { label: "Não lidos", value: "unread" },
+  { label: "Abertos", value: "open" },
+  { label: "Pendentes", value: "pending" },
+  { label: "Fechados", value: "closed" },
 ];
 
 export function ConversationList({
@@ -81,7 +81,7 @@ export function ConversationList({
     (async () => {
       const { data, error } = await supabase
         .from("conversations")
-        .select("*, contact:contacts(*)")
+        .select("*, contact:contacts(*, contact_tags(tags(id, name, color)))")
         .order("last_message_at", { ascending: false });
 
       if (cancelled) return;
@@ -160,14 +160,14 @@ export function ConversationList({
           <Input
             value={search}
             onChange={handleSearchChange}
-            placeholder="Search conversations..."
+            placeholder="Buscar conversas..."
             className="border-border bg-muted pl-9 text-sm text-foreground placeholder-muted-foreground focus:border-primary/50"
           />
         </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted">
-              {activeFilter?.label ?? "All"}
+              {activeFilter?.label ?? "Todos"}
               <ChevronDown className="h-3 w-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -205,7 +205,7 @@ export function ConversationList({
           </div>
         ) : filtered.length === 0 ? (
           <div className="px-4 py-12 text-center">
-            <p className="text-sm text-muted-foreground">No conversations found</p>
+            <p className="text-sm text-muted-foreground">Nenhuma conversa encontrada</p>
           </div>
         ) : (
           <div className="flex flex-col">
@@ -236,8 +236,10 @@ function ConversationItem({
   onSelect,
 }: ConversationItemProps) {
   const contact = conversation.contact;
-  const displayName = contact?.name || contact?.phone || "Unknown";
+  const displayName = contact?.name || contact?.phone || "Desconhecido";
   const initials = displayName.charAt(0).toUpperCase();
+  const rawContactTags = (contact as unknown as { contact_tags?: { tags: { id: string; name: string; color: string } }[] })?.contact_tags ?? [];
+  const tags = rawContactTags.map((ct) => ct.tags).filter(Boolean);
 
   const handleClick = useCallback(() => {
     onSelect(conversation);
@@ -276,13 +278,28 @@ function ConversationItem({
           <span className="truncate text-sm font-medium text-foreground">
             {displayName}
           </span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
+          <div className="flex shrink-0 flex-wrap justify-end gap-1">
+            {tags.length > 0 ? tags.map((tag) => (
+              <span
+                key={tag.id}
+                className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                style={{ backgroundColor: `${tag.color}20`, color: tag.color, border: `1px solid ${tag.color}40` }}
+              >
+                {tag.name}
+              </span>
+            )) : (
+              <span className="text-[10px] text-muted-foreground">{timeAgo}</span>
+            )}
+          </div>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
           <p className="truncate text-xs text-muted-foreground">
-            {conversation.last_message_text || "No messages yet"}
+            {conversation.last_message_text || "Sem mensagens ainda"}
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
+            {tags.length > 0 && (
+              <span className="text-[10px] text-muted-foreground">{timeAgo}</span>
+            )}
             {conversation.unread_count > 0 && (
               <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
                 {conversation.unread_count}

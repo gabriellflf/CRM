@@ -72,9 +72,9 @@ export interface FlowTemplate {
 // ============================================================
 const WELCOME_MENU: FlowTemplate = {
   slug: "welcome_menu",
-  name: "Welcome menu",
+  name: "Menu de boas-vindas",
   description:
-    "Greet customers who type a keyword and route them to the right agent based on whether they're new or existing.",
+    "Sauda clientes que digitam uma palavra-chave e direciona para o agente certo conforme se são novos ou existentes.",
   icon: "MessageSquare",
   trigger_type: "keyword",
   trigger_config: { keywords: ["support", "help", "hi"], match_type: "contains" },
@@ -127,9 +127,9 @@ const WELCOME_MENU: FlowTemplate = {
 // ============================================================
 const FAQ_BOT: FlowTemplate = {
   slug: "faq_bot",
-  name: "FAQ bot",
+  name: "Bot de FAQ",
   description:
-    "Answer common questions automatically. Customer picks a topic from a list; the bot replies with the answer and ends.",
+    "Responde perguntas comuns automaticamente. O cliente escolhe um tema de uma lista; o bot responde e encerra.",
   icon: "HelpCircle",
   trigger_type: "keyword",
   trigger_config: {
@@ -227,9 +227,9 @@ const FAQ_BOT: FlowTemplate = {
 // ============================================================
 const LEAD_CAPTURE: FlowTemplate = {
   slug: "lead_capture",
-  name: "Lead capture",
+  name: "Captura de leads",
   description:
-    "Greet first-time inbounds, capture name + email + company, then hand off to sales with the answers in the note.",
+    "Sauda novos contatos, coleta nome + e-mail + empresa e transfere para vendas com as respostas na nota.",
   icon: "UserPlus",
   trigger_type: "first_inbound_message",
   trigger_config: {},

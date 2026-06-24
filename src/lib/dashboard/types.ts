@@ -55,11 +55,20 @@ export type ActivityKind =
   | 'automation'
   | 'contact'
 
+export interface ActivityTag {
+  name: string
+  color: string
+}
+
 export interface ActivityItem {
   id: string
   kind: ActivityKind
   /** Primary line of text rendered in the feed. Pre-formatted. */
   text: string
+  /** Optional short preview shown below the main line (e.g. message snippet). */
+  preview?: string
+  /** Tags linked to the contact at the time of the event. */
+  tags?: ActivityTag[]
   /** ISO timestamp the item happened at, drives relative-time + sort. */
   at: string
   /** Optional deep-link for the whole row (not all items have a target). */

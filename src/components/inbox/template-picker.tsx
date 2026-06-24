@@ -187,12 +187,12 @@ export function TemplatePicker({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-popover-foreground">
             <LayoutTemplate className="h-4 w-4 text-primary" />
-            {selected ? selected.name : "Send template"}
+            {selected ? selected.name : "Enviar modelo"}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
             {selected
-              ? "Fill in the placeholders to render this template. Meta requires every variable to be set."
-              : "Pick an approved WhatsApp template to send to this contact."}
+              ? "Preencha os espaços reservados para renderizar este modelo. A Meta exige que todas as variáveis sejam definidas."
+              : "Escolha um modelo aprovado do WhatsApp para enviar a este contato."}
           </DialogDescription>
         </DialogHeader>
 
@@ -204,10 +204,10 @@ export function TemplatePicker({
               </div>
             ) : templates.length === 0 ? (
               <div className="rounded-md border border-border bg-background/50 p-6 text-center">
-                <p className="text-sm text-popover-foreground">No approved templates</p>
+                <p className="text-sm text-popover-foreground">Nenhum modelo aprovado</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Approve a template in Meta WhatsApp Manager, then sync it
-                  from Settings → Templates.
+                  Aprove um modelo no Meta WhatsApp Manager e sincronize em
+                  Configurações → Modelos.
                 </p>
               </div>
             ) : (
@@ -246,7 +246,7 @@ export function TemplatePicker({
         ) : (
           <div className="space-y-3">
             <div className="rounded-md border border-border bg-background/50 p-3">
-              <p className="mb-1 text-xs text-muted-foreground">Preview</p>
+              <p className="mb-1 text-xs text-muted-foreground">Visualização</p>
               <p className="whitespace-pre-wrap text-sm text-popover-foreground">
                 {renderBodyPreview(selected.body_text, params)}
               </p>
@@ -264,7 +264,7 @@ export function TemplatePicker({
                 <Input
                   value={headerText}
                   onChange={(e) => setHeaderText(e.target.value)}
-                  placeholder="Value for the header variable"
+                  placeholder="Valor para a variável do cabeçalho"
                   className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
                 />
               </div>
@@ -279,7 +279,7 @@ export function TemplatePicker({
                     next[i] = e.target.value;
                     setParams(next);
                   }}
-                  placeholder={`Value for {{${v}}}`}
+                  placeholder={`Valor para {{${v}}}`}
                   className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
                 />
               </div>
@@ -297,7 +297,7 @@ export function TemplatePicker({
                       [slot.index]: e.target.value,
                     }))
                   }
-                  placeholder="URL suffix value"
+                  placeholder="Valor do sufixo da URL"
                   className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
                 />
                 <p className="text-[10px] text-muted-foreground break-all">
@@ -317,14 +317,14 @@ export function TemplatePicker({
                 className="border-border text-popover-foreground hover:bg-muted"
               >
                 <ArrowLeft className="h-4 w-4" />
-                Back
+                Voltar
               </Button>
               <Button
                 disabled={!canConfirm}
                 onClick={confirm}
                 className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
-                Send template
+                Enviar modelo
               </Button>
             </>
           ) : (
@@ -333,7 +333,7 @@ export function TemplatePicker({
               onClick={() => handleOpenChange(false)}
               className="border-border text-popover-foreground hover:bg-muted"
             >
-              Cancel
+              Cancelar
             </Button>
           )}
         </DialogFooter>

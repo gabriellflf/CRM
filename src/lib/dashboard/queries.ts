@@ -272,7 +272,7 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
   const [msgs, contacts, deals, broadcasts, autoLogs] = await Promise.all([
     db
       .from('messages')
-      .select('id, content_text, sender_type, created_at, conversation_id, conversations(contact_id, contacts(name, phone))')
+      .select('id, content_text, sender_type, created_at, conversation_id, conversations(contact_id, contacts(name, phone, contact_tags(tags(name, color))))')
       .eq('sender_type', 'customer')
       .order('created_at', { ascending: false })
       .limit(10),
@@ -308,17 +308,32 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
     created_at: string
     conversation_id: string
     conversations:
-      | { contact_id: string | null; contacts: { name: string | null; phone: string }[] | { name: string | null; phone: string } | null }[]
-      | { contact_id: string | null; contacts: { name: string | null; phone: string }[] | { name: string | null; phone: string } | null }
+      | { contact_id: string | null; contacts: { name: string | null; phone: string; contact_tags: { tags: { name: string; color: string } | { name: string; color: string }[] | null }[] | null }[] | { name: string | null; phone: string; contact_tags: { tags: { name: string; color: string } | { name: string; color: string }[] | null }[] | null } | null }[]
+      | { contact_id: string | null; contacts: { name: string | null; phone: string; contact_tags: { tags: { name: string; color: string } | { name: string; color: string }[] | null }[] | null }[] | { name: string | null; phone: string; contact_tags: { tags: { name: string; color: string } | { name: string; color: string }[] | null }[] | null } | null }
       | null
   }>) {
     const conv = Array.isArray(m.conversations) ? m.conversations[0] : m.conversations
     const contact = Array.isArray(conv?.contacts) ? conv?.contacts[0] : conv?.contacts
-    const who = contact?.name || contact?.phone || 'Unknown'
+    const who = contact?.name || contact?.phone || 'Desconhecido'
+
+    const rawTags = contact?.contact_tags ?? []
+    const tags = rawTags.flatMap((ct) => {
+      const t = Array.isArray(ct.tags) ? ct.tags[0] : ct.tags
+      return t ? [{ name: t.name, color: t.color }] : []
+    })
+
+    const preview = m.content_text
+      ? m.content_text.length > 60
+        ? `${m.content_text.slice(0, 60)}…`
+        : m.content_text
+      : undefined
+
     items.push({
       id: `msg-${m.id}`,
       kind: 'message',
-      text: `New message from ${who}`,
+      text: `Nova mensagem de ${who}`,
+      preview,
+      tags: tags.length > 0 ? tags : undefined,
       at: m.created_at,
       href: `/inbox?c=${m.conversation_id}`,
     })
@@ -328,7 +343,7 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
     items.push({
       id: `contact-${c.id}`,
       kind: 'contact',
-      text: `New contact: ${c.name || c.phone}`,
+      text: `Novo contato: ${c.name || c.phone}`,
       at: c.created_at,
       href: '/contacts',
     })
@@ -345,8 +360,8 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
       id: `deal-${d.id}`,
       kind: 'deal',
       text: stage?.name
-        ? `Deal "${d.title}" in ${stage.name}`
-        : `Deal "${d.title}" updated`,
+        ? `Negócio "${d.title}" em ${stage.name}`
+        : `Negócio "${d.title}" atualizado`,
       at: d.updated_at,
       href: '/pipelines',
     })
@@ -361,12 +376,12 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
   }>) {
     const label =
       b.status === 'sent'
-        ? `sent to ${b.total_recipients} contacts`
-        : `${b.status} (${b.total_recipients} recipients)`
+        ? `enviado para ${b.total_recipients} contatos`
+        : `${b.status} (${b.total_recipients} destinatários)`
     items.push({
       id: `broadcast-${b.id}`,
       kind: 'broadcast',
-      text: `Broadcast "${b.name}" ${label}`,
+      text: `Disparo "${b.name}" ${label}`,
       at: b.created_at,
       href: '/broadcasts',
     })
@@ -382,12 +397,12 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
   }>) {
     const automation = Array.isArray(l.automation) ? l.automation[0] : l.automation
     const contact = Array.isArray(l.contact) ? l.contact[0] : l.contact
-    const who = contact?.name || contact?.phone || 'a contact'
-    const autoName = automation?.name || 'Automation'
+    const who = contact?.name || contact?.phone || 'um contato'
+    const autoName = automation?.name || 'Automação'
     items.push({
       id: `auto-${l.id}`,
       kind: 'automation',
-      text: `Automation "${autoName}" ${l.status === 'failed' ? 'failed for' : 'triggered for'} ${who}`,
+      text: `Automação "${autoName}" ${l.status === 'failed' ? 'falhou para' : 'acionada para'} ${who}`,
       at: l.created_at,
     })
   }

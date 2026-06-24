@@ -56,12 +56,12 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
   return (
     <section className="rounded-xl border border-border bg-card">
       <header className="flex items-center justify-between border-b border-border px-5 py-4">
-        <h2 className="text-sm font-semibold text-foreground">Recent Activity</h2>
+        <h2 className="text-sm font-semibold text-foreground">Atividade Recente</h2>
         <Link
           href="/inbox"
           className="text-xs font-medium text-primary hover:text-primary/80"
         >
-          View all →
+          Ver tudo →
         </Link>
       </header>
 
@@ -75,8 +75,8 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
         <div className="p-5">
           <EmptyState
             icon={Inbox}
-            title="No activity yet"
-            hint="Activity from messages, deals, broadcasts, and automations will appear here."
+            title="Sem atividade ainda"
+            hint="Atividades de mensagens, negócios, disparos e automações aparecerão aqui."
           />
         </div>
       ) : (
@@ -90,18 +90,36 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
               // (bg-card/40 vanishes against a white card surface in light).
               const stripe = i % 2 === 0 ? 'bg-transparent' : 'bg-muted/40'
               const row = (
-                <div className="flex items-center gap-3 px-5 py-2.5">
+                <div className="flex items-start gap-3 px-5 py-2.5">
                   <span
                     className={cn(
-                      'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full',
+                      'mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full',
                       theme.badge,
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" />
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                    {it.text}
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm text-foreground">{it.text}</span>
+                      {it.tags && it.tags.length > 0 && (
+                        <div className="flex flex-shrink-0 flex-wrap gap-1">
+                          {it.tags.slice(0, 3).map((tag) => (
+                            <span
+                              key={tag.name}
+                              className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                              style={{ backgroundColor: `${tag.color}22`, color: tag.color }}
+                            >
+                              {tag.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {it.preview && (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{it.preview}</p>
+                    )}
+                  </div>
                   <span className="flex-shrink-0 text-xs text-muted-foreground tabular-nums">
                     {relativeTime(it.at)}
                   </span>
@@ -122,11 +140,11 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
           </ul>
           <footer className="flex items-center justify-between border-t border-border px-5 py-3 text-xs">
             <span className="text-muted-foreground tabular-nums">
-              Showing {visible.length} of {totalLoaded}
+              Exibindo {visible.length} de {totalLoaded}
               {totalLoaded === 50 ? '+' : ''}
             </span>
             <div className="flex items-center gap-1">
-              <span className="mr-1 text-muted-foreground">Show</span>
+              <span className="mr-1 text-muted-foreground">Mostrar</span>
               {PAGE_SIZES.map((size, i) => {
                 const disabled = !isSizeUseful(size, i)
                 return (
@@ -159,9 +177,9 @@ function relativeTime(iso: string): string {
   const then = new Date(iso).getTime()
   if (Number.isNaN(then)) return ''
   const diffSec = Math.round((Date.now() - then) / 1000)
-  if (diffSec < 60) return `${Math.max(1, diffSec)}s ago`
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`
-  if (diffSec < 2_592_000) return `${Math.floor(diffSec / 86400)}d ago`
+  if (diffSec < 60) return `${Math.max(1, diffSec)}s atrás`
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}min atrás`
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h atrás`
+  if (diffSec < 2_592_000) return `${Math.floor(diffSec / 86400)}d atrás`
   return new Date(iso).toLocaleDateString()
 }

@@ -61,6 +61,7 @@ const SECURITY_HEADERS = [
 ] as const;
 
 const nextConfig: NextConfig = {
+  devIndicators: false,
   /**
    * Cache-Control policy.
    *
