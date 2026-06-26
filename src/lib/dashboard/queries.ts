@@ -33,17 +33,25 @@ export async function loadMetrics(db: DB, operatorId?: string): Promise<MetricsB
   const todayStart = startOfLocalDay().toISOString()
   const yesterdayStart = daysAgoStart(1).toISOString()
 
-  const convBase = () => {
-    const q = db.from('conversations').eq('status', 'open')
-    return operatorId ? q.eq('assigned_agent_id', operatorId) : q
-  }
-  const dealsBase = () => {
-    const q = db.from('deals').eq('status', 'open')
-    return operatorId ? q.eq('assigned_to', operatorId) : q
-  }
-  const msgsBase = () => {
-    const q = db.from('messages').in('sender_type', operatorId ? ['agent'] : ['agent', 'bot']).eq('is_note', false)
-    return operatorId ? q.eq('sender_id', operatorId) : q
+  // Build each query independently — avoids query builder reuse issues.
+  let qConvCur = db.from('conversations').select('id', { count: 'exact', head: true }).eq('status', 'open')
+  let qConvToday = db.from('conversations').select('id', { count: 'exact', head: true }).eq('status', 'open').gte('created_at', todayStart)
+  let qConvYest = db.from('conversations').select('id', { count: 'exact', head: true }).eq('status', 'open').gte('created_at', yesterdayStart).lt('created_at', todayStart)
+  let qDealsAll = db.from('deals').select('value, status').eq('status', 'open')
+  let qDealsToday = db.from('deals').select('value').eq('status', 'open').gte('created_at', todayStart)
+  let qDealsYest = db.from('deals').select('value').eq('status', 'open').gte('created_at', yesterdayStart).lt('created_at', todayStart)
+  let qMsgsToday = db.from('messages').select('id', { count: 'exact', head: true }).in('sender_type', ['agent', 'bot']).eq('is_note', false).gte('created_at', todayStart)
+  let qMsgsYest = db.from('messages').select('id', { count: 'exact', head: true }).in('sender_type', ['agent', 'bot']).eq('is_note', false).gte('created_at', yesterdayStart).lt('created_at', todayStart)
+
+  if (operatorId) {
+    qConvCur = qConvCur.eq('assigned_agent_id', operatorId)
+    qConvToday = qConvToday.eq('assigned_agent_id', operatorId)
+    qConvYest = qConvYest.eq('assigned_agent_id', operatorId)
+    qDealsAll = qDealsAll.eq('assigned_to', operatorId)
+    qDealsToday = qDealsToday.eq('assigned_to', operatorId)
+    qDealsYest = qDealsYest.eq('assigned_to', operatorId)
+    qMsgsToday = qMsgsToday.eq('sender_id', operatorId).eq('sender_type', 'agent')
+    qMsgsYest = qMsgsYest.eq('sender_id', operatorId).eq('sender_type', 'agent')
   }
 
   const [
@@ -58,16 +66,16 @@ export async function loadMetrics(db: DB, operatorId?: string): Promise<MetricsB
     messagesToday,
     messagesYesterday,
   ] = await Promise.all([
-    convBase().select('id', { count: 'exact', head: true }),
-    convBase().select('id', { count: 'exact', head: true }).gte('created_at', todayStart),
-    convBase().select('id', { count: 'exact', head: true }).gte('created_at', yesterdayStart).lt('created_at', todayStart),
+    qConvCur,
+    qConvToday,
+    qConvYest,
     db.from('contacts').select('id', { count: 'exact', head: true }).gte('created_at', todayStart),
     db.from('contacts').select('id', { count: 'exact', head: true }).gte('created_at', yesterdayStart).lt('created_at', todayStart),
-    dealsBase().select('value, status'),
-    dealsBase().select('value').gte('created_at', todayStart),
-    dealsBase().select('value').gte('created_at', yesterdayStart).lt('created_at', todayStart),
-    msgsBase().select('id', { count: 'exact', head: true }).gte('created_at', todayStart),
-    msgsBase().select('id', { count: 'exact', head: true }).gte('created_at', yesterdayStart).lt('created_at', todayStart),
+    qDealsAll,
+    qDealsToday,
+    qDealsYest,
+    qMsgsToday,
+    qMsgsYest,
   ])
 
   const openDealsRows = (openDeals.data ?? []) as { value: number | null }[]

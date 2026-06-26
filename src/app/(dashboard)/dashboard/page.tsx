@@ -184,7 +184,7 @@ export default function DashboardPage() {
             Análise em tempo real de conversas, contatos, negócios, disparos e automações.
           </p>
         </div>
-        {operators.length > 1 && (
+        {operators.length > 0 && (
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />
             <select
