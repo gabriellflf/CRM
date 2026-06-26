@@ -9,6 +9,7 @@ import {
   UserPlus,
   DollarSign,
   Send,
+  Users,
 } from 'lucide-react'
 
 import {
@@ -47,9 +48,25 @@ import { ActivityFeed } from '@/components/dashboard/activity-feed'
 import { MetricDetailModal } from '@/components/dashboard/metric-detail-modal'
 
 type RangeDays = 7 | 30 | 90
+interface Operator { user_id: string; full_name: string }
 
 export default function DashboardPage() {
   const { defaultCurrency } = useAuth()
+
+  const [operators, setOperators] = useState<Operator[]>([])
+  const [operatorId, setOperatorId] = useState<string>('')
+
+  useEffect(() => {
+    const db = createClient()
+    ;(async () => {
+      const { data: { session } } = await db.auth.getSession()
+      if (!session?.user) return
+      const { data: profile } = await db.from('profiles').select('account_id').eq('user_id', session.user.id).maybeSingle()
+      if (!profile?.account_id) return
+      const { data } = await db.from('profiles').select('user_id, full_name').eq('account_id', profile.account_id).order('full_name')
+      setOperators((data ?? []) as Operator[])
+    })()
+  }, [])
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
 
@@ -89,28 +106,27 @@ export default function DashboardPage() {
     setModalKind(kind)
     setModalLoading(true)
     const db = createClient()
+    const op = operatorId || undefined
     try {
-      if (kind === 'conversations') setModalConversations(await loadActiveConversationsDetail(db))
+      if (kind === 'conversations') setModalConversations(await loadActiveConversationsDetail(db, op))
       if (kind === 'contacts') setModalContacts(await loadNewContactsTodayDetail(db))
-      if (kind === 'deals') setModalDeals(await loadOpenDealsDetail(db))
-      if (kind === 'messages') setModalMessages(await loadMessagesSentTodayDetail(db))
+      if (kind === 'deals') setModalDeals(await loadOpenDealsDetail(db, op))
+      if (kind === 'messages') setModalMessages(await loadMessagesSentTodayDetail(db, op))
     } finally {
       setModalLoading(false)
     }
-  }, [])
+  }, [operatorId])
 
   const loadAll = useCallback(() => {
     const db = createClient()
+    const op = operatorId || undefined
 
-    // Kick everything off in parallel. Each block has its own
-    // setState + finally so a slow query doesn't hold up faster
-    // sections — each widget shows its own skeleton independently.
-    void loadMetrics(db)
+    void loadMetrics(db, op)
       .then((m) => setMetrics(m))
       .catch((err) => console.error('[dashboard] metrics failed:', err))
       .finally(() => setMetricsLoading(false))
 
-    void loadConversationsSeries(db, 30)
+    void loadConversationsSeries(db, 30, op)
       .then((s) => setSeries((prev) => ({ ...prev, 30: s })))
       .catch((err) => console.error('[dashboard] series failed:', err))
       .finally(() => setSeriesLoading(false))
@@ -120,24 +136,21 @@ export default function DashboardPage() {
       .catch((err) => console.error('[dashboard] pipeline failed:', err))
       .finally(() => setPipelineLoading(false))
 
-    void loadResponseTime(db)
+    void loadResponseTime(db, op)
       .then((r) => setResponseTime(r))
       .catch((err) => console.error('[dashboard] response time failed:', err))
       .finally(() => setResponseTimeLoading(false))
 
-    void loadAvgResponseTime(db)
+    void loadAvgResponseTime(db, op)
       .then((r) => setAvgResponseTime(r))
       .catch((err) => console.error('[dashboard] avg response time failed:', err))
       .finally(() => setAvgResponseTimeLoading(false))
 
-    // Fetch up to 50 so the biggest page-size option in the feed
-    // (50 rows) is already in memory — switching sizes then becomes
-    // a pure client-side slice with no extra round trip.
     void loadActivity(db, 50)
       .then((a) => setActivity(a))
       .catch((err) => console.error('[dashboard] activity failed:', err))
       .finally(() => setActivityLoading(false))
-  }, [])
+  }, [operatorId])
 
   useEffect(() => {
     loadAll()
@@ -153,22 +166,42 @@ export default function DashboardPage() {
       if (series[r] !== null) return
       setSeriesLoading(true)
       const db = createClient()
-      loadConversationsSeries(db, r)
+      loadConversationsSeries(db, r, operatorId || undefined)
         .then((s) => setSeries((prev) => ({ ...prev, [r]: s })))
         .catch((err) => console.error('[dashboard] series failed:', err))
         .finally(() => setSeriesLoading(false))
     },
-    [series],
+    [series, operatorId],
   )
 
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Painel</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Análise em tempo real de conversas, contatos, negócios, disparos e automações.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Painel</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Análise em tempo real de conversas, contatos, negócios, disparos e automações.
+          </p>
+        </div>
+        {operators.length > 1 && (
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <select
+              value={operatorId}
+              onChange={(e) => {
+                setOperatorId(e.target.value)
+                setSeries({ 7: null, 30: null, 90: null })
+              }}
+              className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">Todos os operadores</option>
+              {operators.map((op) => (
+                <option key={op.user_id} value={op.user_id}>{op.full_name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Metric cards */}

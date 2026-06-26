@@ -29,9 +29,22 @@ type DB = SupabaseClient
 
 // --- 1. Metric cards ---------------------------------------------------
 
-export async function loadMetrics(db: DB): Promise<MetricsBundle> {
+export async function loadMetrics(db: DB, operatorId?: string): Promise<MetricsBundle> {
   const todayStart = startOfLocalDay().toISOString()
   const yesterdayStart = daysAgoStart(1).toISOString()
+
+  const convBase = () => {
+    const q = db.from('conversations').eq('status', 'open')
+    return operatorId ? q.eq('assigned_agent_id', operatorId) : q
+  }
+  const dealsBase = () => {
+    const q = db.from('deals').eq('status', 'open')
+    return operatorId ? q.eq('assigned_to', operatorId) : q
+  }
+  const msgsBase = () => {
+    const q = db.from('messages').in('sender_type', operatorId ? ['agent'] : ['agent', 'bot']).eq('is_note', false)
+    return operatorId ? q.eq('sender_id', operatorId) : q
+  }
 
   const [
     openConvCur,
@@ -45,40 +58,16 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
     messagesToday,
     messagesYesterday,
   ] = await Promise.all([
-    db.from('conversations').select('id', { count: 'exact', head: true }).eq('status', 'open'),
-    db
-      .from('conversations')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'open')
-      .gte('created_at', todayStart),
-    db
-      .from('conversations')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'open')
-      .gte('created_at', yesterdayStart)
-      .lt('created_at', todayStart),
+    convBase().select('id', { count: 'exact', head: true }),
+    convBase().select('id', { count: 'exact', head: true }).gte('created_at', todayStart),
+    convBase().select('id', { count: 'exact', head: true }).gte('created_at', yesterdayStart).lt('created_at', todayStart),
     db.from('contacts').select('id', { count: 'exact', head: true }).gte('created_at', todayStart),
-    db
-      .from('contacts')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', yesterdayStart)
-      .lt('created_at', todayStart),
-    db.from('deals').select('value, status').eq('status', 'open'),
-    db.from('deals').select('value').eq('status', 'open').gte('created_at', todayStart),
-    db.from('deals').select('value').eq('status', 'open').gte('created_at', yesterdayStart).lt('created_at', todayStart),
-    db
-      .from('messages')
-      .select('id', { count: 'exact', head: true })
-      .in('sender_type', ['agent', 'bot'])
-      .eq('is_note', false)
-      .gte('created_at', todayStart),
-    db
-      .from('messages')
-      .select('id', { count: 'exact', head: true })
-      .in('sender_type', ['agent', 'bot'])
-      .eq('is_note', false)
-      .gte('created_at', yesterdayStart)
-      .lt('created_at', todayStart),
+    db.from('contacts').select('id', { count: 'exact', head: true }).gte('created_at', yesterdayStart).lt('created_at', todayStart),
+    dealsBase().select('value, status'),
+    dealsBase().select('value').gte('created_at', todayStart),
+    dealsBase().select('value').gte('created_at', yesterdayStart).lt('created_at', todayStart),
+    msgsBase().select('id', { count: 'exact', head: true }).gte('created_at', todayStart),
+    msgsBase().select('id', { count: 'exact', head: true }).gte('created_at', yesterdayStart).lt('created_at', todayStart),
   ])
 
   const openDealsRows = (openDeals.data ?? []) as { value: number | null }[]
@@ -115,13 +104,13 @@ export interface ActiveConversationRow {
   contact: { name: string | null; phone: string } | null
 }
 
-export async function loadActiveConversationsDetail(db: DB): Promise<ActiveConversationRow[]> {
-  const { data } = await db
+export async function loadActiveConversationsDetail(db: DB, operatorId?: string): Promise<ActiveConversationRow[]> {
+  let q = db
     .from('conversations')
     .select('id, status, last_message_text, last_message_at, contact:contacts(name, phone)')
     .eq('status', 'open')
-    .order('last_message_at', { ascending: false })
-    .limit(50)
+  if (operatorId) q = q.eq('assigned_agent_id', operatorId)
+  const { data } = await q.order('last_message_at', { ascending: false }).limit(50)
   return (data ?? []) as ActiveConversationRow[]
 }
 
@@ -153,13 +142,13 @@ export interface OpenDealRow {
   stage: { name: string } | null
 }
 
-export async function loadOpenDealsDetail(db: DB): Promise<OpenDealRow[]> {
-  const { data } = await db
+export async function loadOpenDealsDetail(db: DB, operatorId?: string): Promise<OpenDealRow[]> {
+  let q = db
     .from('deals')
     .select('id, title, value, expected_close_date, contact:contacts(name, phone), stage:pipeline_stages(name)')
     .eq('status', 'open')
-    .order('value', { ascending: false })
-    .limit(50)
+  if (operatorId) q = q.eq('assigned_to', operatorId)
+  const { data } = await q.order('value', { ascending: false }).limit(50)
   return (data ?? []) as OpenDealRow[]
 }
 
@@ -171,16 +160,16 @@ export interface MessageSentRow {
   conversation: { contact: { name: string | null; phone: string } | null } | null
 }
 
-export async function loadMessagesSentTodayDetail(db: DB): Promise<MessageSentRow[]> {
+export async function loadMessagesSentTodayDetail(db: DB, operatorId?: string): Promise<MessageSentRow[]> {
   const todayStart = startOfLocalDay().toISOString()
-  const { data } = await db
+  let q = db
     .from('messages')
     .select('id, content_text, content_type, created_at, conversation:conversations(contact:contacts(name, phone))')
-    .in('sender_type', ['agent', 'bot'])
+    .in('sender_type', operatorId ? ['agent'] : ['agent', 'bot'])
     .eq('is_note', false)
     .gte('created_at', todayStart)
-    .order('created_at', { ascending: false })
-    .limit(50)
+  if (operatorId) q = q.eq('sender_id', operatorId)
+  const { data } = await q.order('created_at', { ascending: false }).limit(50)
   return (data ?? []) as MessageSentRow[]
 }
 
@@ -189,13 +178,28 @@ export async function loadMessagesSentTodayDetail(db: DB): Promise<MessageSentRo
 export async function loadConversationsSeries(
   db: DB,
   rangeDays: number,
+  operatorId?: string,
 ): Promise<ConversationsSeriesPoint[]> {
   const start = daysAgoStart(rangeDays - 1).toISOString()
-  const { data, error } = await db
+  let convIds: string[] | null = null
+  if (operatorId) {
+    const { data: convData } = await db
+      .from('conversations')
+      .select('id')
+      .eq('assigned_agent_id', operatorId)
+      .gte('created_at', start)
+    convIds = (convData ?? []).map((c: { id: string }) => c.id)
+    if (convIds.length === 0) {
+      return lastNDayKeys(rangeDays).map((day) => ({ day, incoming: 0, outgoing: 0 }))
+    }
+  }
+  let q = db
     .from('messages')
     .select('created_at, sender_type')
     .gte('created_at', start)
     .order('created_at', { ascending: true })
+  if (convIds) q = q.in('conversation_id', convIds)
+  const { data, error } = await q
   if (error) throw error
 
   const keys = lastNDayKeys(rangeDays)
@@ -254,11 +258,11 @@ export async function loadPipelineDonut(db: DB): Promise<PipelineDonutData> {
 
 // --- 4. Response time by day of week ----------------------------------
 
-export async function loadResponseTime(db: DB): Promise<ResponseTimeSummary> {
-  // Pull 14 days of messages + conversations.created_at to identify
-  // "new" conversations (opened within the same 14-day window).
-  // Only the first customer→agent pair per NEW conversation is counted.
+export async function loadResponseTime(db: DB, operatorId?: string): Promise<ResponseTimeSummary> {
   const fourteenDaysAgo = daysAgoStart(13).toISOString()
+
+  let convQ = db.from('conversations').select('id, created_at').gte('created_at', fourteenDaysAgo)
+  if (operatorId) convQ = convQ.eq('assigned_agent_id', operatorId)
 
   const [msgRes, convRes] = await Promise.all([
     db
@@ -267,10 +271,7 @@ export async function loadResponseTime(db: DB): Promise<ResponseTimeSummary> {
       .gte('created_at', fourteenDaysAgo)
       .order('conversation_id', { ascending: true })
       .order('created_at', { ascending: true }),
-    db
-      .from('conversations')
-      .select('id, created_at')
-      .gte('created_at', fourteenDaysAgo),
+    convQ,
   ])
   if (msgRes.error) throw msgRes.error
 
@@ -357,14 +358,28 @@ export async function loadResponseTime(db: DB): Promise<ResponseTimeSummary> {
 
 // --- 5. Average response time (all pairs, not just first) -------------
 
-export async function loadAvgResponseTime(db: DB): Promise<ResponseTimeSummary> {
+export async function loadAvgResponseTime(db: DB, operatorId?: string): Promise<ResponseTimeSummary> {
   const fourteenDaysAgo = daysAgoStart(13).toISOString()
-  const { data, error } = await db
+  let convIds: string[] | null = null
+  if (operatorId) {
+    const { data: convData } = await db
+      .from('conversations')
+      .select('id')
+      .eq('assigned_agent_id', operatorId)
+    convIds = (convData ?? []).map((c: { id: string }) => c.id)
+    if (convIds.length === 0) {
+      const empty: ResponseTimeBucket[] = Array.from({ length: 7 }, (_, dow) => ({ dow, avgMinutes: null, samples: 0 }))
+      return { buckets: empty, thisWeekAvg: null, lastWeekAvg: null }
+    }
+  }
+  let q = db
     .from('messages')
     .select('conversation_id, sender_type, created_at')
     .gte('created_at', fourteenDaysAgo)
     .order('conversation_id', { ascending: true })
     .order('created_at', { ascending: true })
+  if (convIds) q = q.in('conversation_id', convIds)
+  const { data, error } = await q
   if (error) throw error
 
   const rows = (data ?? []) as {
