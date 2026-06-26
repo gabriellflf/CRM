@@ -7,23 +7,26 @@ interface MetricCardProps {
   /** Pre-formatted value for display (e.g. "42" or "$1,250"). */
   value: string
   icon: ComponentType<{ className?: string }>
-  /**
-   * Delta-mode secondary row: arrow + delta text. Omit when the metric
-   * doesn't have a sensible comparison (e.g. total pipeline value).
-   */
   delta?: {
-    /** Positive / negative / zero drives arrow + color. */
     sign: number
-    /** Pre-formatted delta, e.g. "+3 vs yesterday". */
     label: string
   }
-  /** Used instead of `delta` when the metric has a static subtitle. */
   subtitle?: string
+  onClick?: () => void
 }
 
-export function MetricCard({ title, value, icon: Icon, delta, subtitle }: MetricCardProps) {
+export function MetricCard({ title, value, icon: Icon, delta, subtitle, onClick }: MetricCardProps) {
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') onClick() } : undefined}
+      className={cn(
+        'rounded-xl border border-border bg-card p-5',
+        onClick && 'cursor-pointer transition-colors hover:bg-muted/40',
+      )}
+    >
       <div className="flex items-start justify-between">
         <p className="text-sm font-medium text-muted-foreground">{title}</p>
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">

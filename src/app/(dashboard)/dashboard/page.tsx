@@ -18,6 +18,10 @@ import {
   loadMetrics,
   loadPipelineDonut,
   loadResponseTime,
+  loadActiveConversationsDetail,
+  loadNewContactsTodayDetail,
+  loadOpenDealsDetail,
+  loadMessagesSentTodayDetail,
 } from '@/lib/dashboard/queries'
 import type {
   ActivityItem,
@@ -26,6 +30,12 @@ import type {
   PipelineDonutData,
   ResponseTimeSummary,
 } from '@/lib/dashboard/types'
+import type {
+  ActiveConversationRow,
+  NewContactRow,
+  OpenDealRow,
+  MessageSentRow,
+} from '@/lib/dashboard/queries'
 
 import { MetricCard } from '@/components/dashboard/metric-card'
 import { SkeletonCard } from '@/components/dashboard/skeleton'
@@ -34,6 +44,7 @@ import { ConversationsChart } from '@/components/dashboard/conversations-chart'
 import { PipelineDonut } from '@/components/dashboard/pipeline-donut'
 import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
+import { MetricDetailModal } from '@/components/dashboard/metric-detail-modal'
 
 type RangeDays = 7 | 30 | 90
 
@@ -64,6 +75,29 @@ export default function DashboardPage() {
 
   const [activity, setActivity] = useState<ActivityItem[] | null>(null)
   const [activityLoading, setActivityLoading] = useState(true)
+
+  // Metric card drilldown modal
+  type ModalKind = 'conversations' | 'contacts' | 'deals' | 'messages'
+  const [modalKind, setModalKind] = useState<ModalKind | null>(null)
+  const [modalLoading, setModalLoading] = useState(false)
+  const [modalConversations, setModalConversations] = useState<ActiveConversationRow[]>([])
+  const [modalContacts, setModalContacts] = useState<NewContactRow[]>([])
+  const [modalDeals, setModalDeals] = useState<OpenDealRow[]>([])
+  const [modalMessages, setModalMessages] = useState<MessageSentRow[]>([])
+
+  const openModal = useCallback(async (kind: ModalKind) => {
+    setModalKind(kind)
+    setModalLoading(true)
+    const db = createClient()
+    try {
+      if (kind === 'conversations') setModalConversations(await loadActiveConversationsDetail(db))
+      if (kind === 'contacts') setModalContacts(await loadNewContactsTodayDetail(db))
+      if (kind === 'deals') setModalDeals(await loadOpenDealsDetail(db))
+      if (kind === 'messages') setModalMessages(await loadMessagesSentTodayDetail(db))
+    } finally {
+      setModalLoading(false)
+    }
+  }, [])
 
   const loadAll = useCallback(() => {
     const db = createClient()
@@ -151,6 +185,7 @@ export default function DashboardPage() {
                 sign: metrics.activeConversations.previous,
                 label: deltaLabel(metrics.activeConversations.previous, 'novas hoje vs ontem', 'Sem novas conversas em relação a ontem'),
               }}
+              onClick={() => openModal('conversations')}
             />
             <MetricCard
               title="Novos Contatos Hoje"
@@ -165,12 +200,14 @@ export default function DashboardPage() {
                   'Sem alterações em relação a ontem',
                 ),
               }}
+              onClick={() => openModal('contacts')}
             />
             <MetricCard
               title="Valor de Negócios Abertos"
               value={formatCurrency(metrics.openDealsValue, defaultCurrency)}
               icon={DollarSign}
               subtitle={`${metrics.openDealsCount} negócio${metrics.openDealsCount === 1 ? '' : 's'} aberto${metrics.openDealsCount === 1 ? '' : 's'}`}
+              onClick={() => openModal('deals')}
             />
             <MetricCard
               title="Mensagens Enviadas Hoje"
@@ -185,6 +222,7 @@ export default function DashboardPage() {
                   'Sem alterações em relação a ontem',
                 ),
               }}
+              onClick={() => openModal('messages')}
             />
           </>
         )}
@@ -236,6 +274,17 @@ export default function DashboardPage() {
 
       {/* Activity feed */}
       <ActivityFeed items={activity} loading={activityLoading} />
+
+      <MetricDetailModal
+        kind={modalKind}
+        loading={modalLoading}
+        conversations={modalConversations}
+        contacts={modalContacts}
+        deals={modalDeals}
+        messages={modalMessages}
+        currency={defaultCurrency}
+        onClose={() => setModalKind(null)}
+      />
     </div>
   )
 }

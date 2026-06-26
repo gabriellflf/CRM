@@ -99,6 +99,85 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
   }
 }
 
+// --- 1b. Metric card drilldown queries --------------------------------
+
+export interface ActiveConversationRow {
+  id: string
+  status: string
+  last_message_text: string | null
+  last_message_at: string | null
+  contact: { name: string | null; phone: string } | null
+}
+
+export async function loadActiveConversationsDetail(db: DB): Promise<ActiveConversationRow[]> {
+  const { data } = await db
+    .from('conversations')
+    .select('id, status, last_message_text, last_message_at, contact:contacts(name, phone)')
+    .eq('status', 'open')
+    .order('last_message_at', { ascending: false })
+    .limit(50)
+  return (data ?? []) as ActiveConversationRow[]
+}
+
+export interface NewContactRow {
+  id: string
+  name: string | null
+  phone: string
+  email: string | null
+  created_at: string
+}
+
+export async function loadNewContactsTodayDetail(db: DB): Promise<NewContactRow[]> {
+  const todayStart = startOfLocalDay().toISOString()
+  const { data } = await db
+    .from('contacts')
+    .select('id, name, phone, email, created_at')
+    .gte('created_at', todayStart)
+    .order('created_at', { ascending: false })
+    .limit(50)
+  return (data ?? []) as NewContactRow[]
+}
+
+export interface OpenDealRow {
+  id: string
+  title: string
+  value: number | null
+  expected_close_date: string | null
+  contact: { name: string | null; phone: string } | null
+  stage: { name: string } | null
+}
+
+export async function loadOpenDealsDetail(db: DB): Promise<OpenDealRow[]> {
+  const { data } = await db
+    .from('deals')
+    .select('id, title, value, expected_close_date, contact:contacts(name, phone), stage:pipeline_stages(name)')
+    .eq('status', 'open')
+    .order('value', { ascending: false })
+    .limit(50)
+  return (data ?? []) as OpenDealRow[]
+}
+
+export interface MessageSentRow {
+  id: string
+  content_text: string | null
+  content_type: string
+  created_at: string
+  conversation: { contact: { name: string | null; phone: string } | null } | null
+}
+
+export async function loadMessagesSentTodayDetail(db: DB): Promise<MessageSentRow[]> {
+  const todayStart = startOfLocalDay().toISOString()
+  const { data } = await db
+    .from('messages')
+    .select('id, content_text, content_type, created_at, conversation:conversations(contact:contacts(name, phone))')
+    .in('sender_type', ['agent', 'bot'])
+    .eq('is_note', false)
+    .gte('created_at', todayStart)
+    .order('created_at', { ascending: false })
+    .limit(50)
+  return (data ?? []) as MessageSentRow[]
+}
+
 // --- 2. Conversations over time ---------------------------------------
 
 export async function loadConversationsSeries(
