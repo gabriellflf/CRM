@@ -65,12 +65,14 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
     db
       .from('messages')
       .select('id', { count: 'exact', head: true })
-      .eq('sender_type', 'agent')
+      .in('sender_type', ['agent', 'bot'])
+      .eq('is_note', false)
       .gte('created_at', todayStart),
     db
       .from('messages')
       .select('id', { count: 'exact', head: true })
-      .eq('sender_type', 'agent')
+      .in('sender_type', ['agent', 'bot'])
+      .eq('is_note', false)
       .gte('created_at', yesterdayStart)
       .lt('created_at', todayStart),
   ])
