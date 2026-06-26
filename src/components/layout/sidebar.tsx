@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import {
+  ChevronLeft,
+  ChevronRight,
   Crown,
   GitBranch,
   LayoutDashboard,
@@ -99,9 +101,12 @@ interface SidebarProps {
   /** Controlled on mobile by the Header's hamburger button. Ignored on lg+. */
   open?: boolean;
   onClose?: () => void;
+  /** Desktop-only: collapses the sidebar to icon-only mode. */
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export function Sidebar({ open = false, onClose }: SidebarProps) {
+export function Sidebar({ open = false, onClose, collapsed = false, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const { mode, toggleMode } = useTheme();
@@ -163,27 +168,29 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       <aside
         className={cn(
           // Mobile: fixed drawer that slides in from the left.
-          "fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r border-white/10 bg-[#082637]",
+          "fixed inset-y-0 left-0 z-40 flex h-full w-72 flex-col border-r border-white/10 bg-[#082637]",
           "transition-transform duration-200 ease-out will-change-transform",
           open ? "translate-x-0" : "-translate-x-full",
           // Desktop: static, always visible — reset all the mobile framing.
-          "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
+          "lg:static lg:z-0 lg:translate-x-0 lg:transition-all lg:duration-200",
+          collapsed ? "lg:w-16" : "lg:w-72",
         )}
         aria-label="Navegação principal"
       >
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
-        <div className="relative flex h-20 shrink-0 items-center justify-start border-b border-white/10 px-6">
-          <Link href="/dashboard" className="flex items-center py-3">
+        <div className="relative flex h-24 shrink-0 items-center justify-start border-b border-white/10 px-5">
+          <Link href="/dashboard" className={cn("flex items-center py-3", collapsed && "lg:hidden")}>
             <Image
               src="/logomja.png"
               alt="Mario Jorge Advocacia"
-              width={130}
-              height={46}
+              width={155}
+              height={55}
               className="object-contain"
               priority
             />
           </Link>
+          {/* Mobile close */}
           <button
             type="button"
             onClick={onClose}
@@ -191,6 +198,18 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             className="absolute right-2 flex h-9 w-9 items-center justify-center rounded-md text-white/60 hover:bg-white/10 hover:text-white lg:hidden"
           >
             <X className="h-5 w-5" />
+          </button>
+          {/* Desktop collapse toggle */}
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+            className={cn(
+              "absolute right-2 hidden h-8 w-8 items-center justify-center rounded-md text-white/60 hover:bg-white/10 hover:text-white lg:flex",
+              collapsed && "right-1/2 translate-x-1/2",
+            )}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </button>
         </div>
 
@@ -209,20 +228,22 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    title={collapsed ? item.label : undefined}
                     className={cn(
                       // Taller on mobile so fingers can hit the row reliably (≥44px).
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-colors lg:py-2",
                       isActive
                         ? "bg-white/15 text-white"
-                        : "text-white/60 hover:bg-white/10 hover:text-white",
+                        : "text-white/80 hover:bg-white/10 hover:text-white",
+                      collapsed && "lg:justify-center lg:px-0",
                     )}
                   >
-                    <item.icon className="h-4 w-4" />
-                    <span className="flex-1">{item.label}</span>
-                    {item.beta && (
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    <span className={cn("flex-1", collapsed && "lg:hidden")}>{item.label}</span>
+                    {item.beta && !collapsed && (
                       <span
                         aria-label="Funcionalidade beta"
-                        className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
+                        className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300 lg:inline"
                       >
                         Beta
                       </span>
@@ -230,7 +251,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     {showUnreadDot && (
                       <span
                         aria-label={`${totalUnread} conversa${totalUnread === 1 ? "" : "s"} não lida${totalUnread === 1 ? "" : "s"}`}
-                        className="relative flex h-2 w-2"
+                        className={cn("relative flex h-2 w-2", collapsed && "lg:absolute lg:right-1 lg:top-1")}
                       >
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
                         <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
@@ -251,15 +272,17 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    title={collapsed ? item.label : undefined}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-colors lg:py-2",
                       isActive
                         ? "bg-white/15 text-white"
-                        : "text-white/60 hover:bg-white/10 hover:text-white",
+                        : "text-white/80 hover:bg-white/10 hover:text-white",
+                      collapsed && "lg:justify-center lg:px-0",
                     )}
                   >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
                   </Link>
                 </li>
               );
@@ -268,10 +291,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               <button
                 type="button"
                 onClick={toggleMode}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/60 transition-colors hover:bg-white/10 hover:text-white lg:py-2"
+                title={collapsed ? "Tema" : undefined}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium text-white/60 transition-colors hover:bg-white/10 hover:text-white lg:py-2",
+                  collapsed && "lg:justify-center lg:px-0",
+                )}
               >
-                {mode === "dark" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                Tema
+                {mode === "dark" ? <Moon className="h-4 w-4 shrink-0" /> : <Sun className="h-4 w-4 shrink-0" />}
+                <span className={cn(collapsed && "lg:hidden")}>Tema</span>
               </button>
             </li>
           </ul>
@@ -285,7 +312,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               match, so we hide it to avoid duplicating the user name
               below; for renamed or shared accounts it tells the user
               which account they're acting in. */}
-          {showAccountStrip && account?.name ? (
+          {showAccountStrip && account?.name && !collapsed ? (
             <div className="mb-2 flex items-center gap-2 px-3 text-xs text-white/50">
               <UsersRound className="size-3.5 shrink-0" />
               {/* `title=` exposes the full name on hover when it
@@ -315,11 +342,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             </div>
           ) : null}
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/10 focus:bg-white/10 focus:outline-none data-popup-open:bg-white/10">
+            <DropdownMenuTrigger className={cn(
+              "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/10 focus:bg-white/10 focus:outline-none data-popup-open:bg-white/10",
+              collapsed && "lg:justify-center lg:px-0",
+            )}>
               <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-medium text-white">
                 {(profile?.full_name || profile?.email || "U").charAt(0).toUpperCase()}
               </div>
-              <div className="min-w-0 flex-1">
+              <div className={cn("min-w-0 flex-1", collapsed && "lg:hidden")}>
                 <p className="truncate text-sm font-medium text-white">
                   {profile?.full_name ?? "Usuário"}
                 </p>

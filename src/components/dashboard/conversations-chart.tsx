@@ -6,6 +6,14 @@ import type { ConversationsSeriesPoint } from '@/lib/dashboard/types'
 import { EmptyState } from './empty-state'
 import { Skeleton } from './skeleton'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 
 type RangeDays = 7 | 30 | 90
 
@@ -27,8 +35,21 @@ const VB_W = 760
 const VB_H = 240
 const PADDING = { top: 16, right: 16, bottom: 28, left: 40 }
 
+// ------------------------------------------------------------
+// Day detail modal types
+// ------------------------------------------------------------
+interface DayConvo {
+  id: string
+  status: string
+  contactName: string
+  contactPhone: string
+  incoming: number
+  outgoing: number
+}
+
 export function ConversationsChart({ series, loading, range, onRangeChange }: ConversationsChartProps) {
   const data = series[range]
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
 
   // Memoise the max so per-day hover math doesn't recompute it.
   const { maxY, niceTicks } = useMemo(() => {
@@ -50,7 +71,7 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
       <header className="flex items-center justify-between border-b border-border px-5 py-4">
         <div>
           <h2 className="text-sm font-semibold text-foreground">Conversas ao Longo do Tempo</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">Volume diário de mensagens por direção</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Volume diário de mensagens por direção · clique num ponto para ver detalhes</p>
         </div>
         <div className="flex items-center gap-1 rounded-lg bg-muted/60 p-1">
           {[7, 30, 90].map((r) => (
@@ -81,7 +102,7 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
             hint="Envie ou receba mensagens para preencher este gráfico."
           />
         ) : (
-          <LineSvg data={data} maxY={maxY} ticks={niceTicks} />
+          <LineSvg data={data} maxY={maxY} ticks={niceTicks} onDayClick={setSelectedDay} />
         )}
       </div>
 
@@ -89,6 +110,10 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
         <LegendDot color="#3b82f6" label="Recebidas" />
         <LegendDot color="#7c3aed" label="Enviadas" />
       </footer>
+
+      {selectedDay && (
+        <DayDetailModal day={selectedDay} onClose={() => setSelectedDay(null)} />
+      )}
     </section>
   )
 }
@@ -101,10 +126,12 @@ function LineSvg({
   data,
   maxY,
   ticks,
+  onDayClick,
 }: {
   data: ConversationsSeriesPoint[]
   maxY: number
   ticks: number[]
+  onDayClick: (day: string) => void
 }) {
   // Hover state: both the snapped index AND the tooltip's pixel
   // offset inside the wrapper div. They're stored together so the
@@ -129,6 +156,20 @@ function LineSvg({
   const incomingPath = data.map((p, i) => `${i === 0 ? 'M' : 'L'}${xFor(i)},${yFor(p.incoming)}`).join(' ')
   const outgoingPath = data.map((p, i) => `${i === 0 ? 'M' : 'L'}${xFor(i)},${yFor(p.outgoing)}`).join(' ')
 
+  // Resolve viewBox x → snapped data index, returning null if outside chart area.
+  const resolveIdx = (clientX: number, svg: SVGSVGElement): number | null => {
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return null
+    const pt = svg.createSVGPoint()
+    pt.x = clientX
+    pt.y = 0
+    const local = pt.matrixTransform(ctm.inverse())
+    const xVb = local.x
+    if (xVb < PADDING.left - 8 || xVb > VB_W - PADDING.right + 8) return null
+    const relative = xVb - PADDING.left
+    return Math.max(0, Math.min(data.length - 1, Math.round(stepX === 0 ? 0 : relative / stepX)))
+  }
+
   // Mouse-move: use the SVG's current screen-CTM to map clientX
   // back to viewBox coordinates. The previous rect-based math
   // assumed the viewBox filled the SVG DOM box linearly, but
@@ -141,28 +182,11 @@ function LineSvg({
     const svg = svgRef.current
     const wrap = wrapRef.current
     if (!svg || !wrap) return
+
     const onMove = (e: MouseEvent) => {
-      const ctm = svg.getScreenCTM()
-      if (!ctm) return
-      const pt = svg.createSVGPoint()
-      pt.x = e.clientX
-      pt.y = e.clientY
-      const local = pt.matrixTransform(ctm.inverse())
-      const xVb = local.x
-      if (xVb < PADDING.left - 8 || xVb > VB_W - PADDING.right + 8) {
-        setHover(null)
-        return
-      }
-      const relative = xVb - PADDING.left
-      const idx = Math.max(
-        0,
-        Math.min(data.length - 1, Math.round(stepX === 0 ? 0 : relative / stepX)),
-      )
-      // Map the snapped data-point's viewBox x back to screen, then
-      // subtract the wrapper's left edge — that pixel offset is what
-      // the absolutely-positioned tooltip div consumes. `xFor` is
-      // inlined here so the effect deps stay stable (it's a closure
-      // that'd otherwise be a new reference every render).
+      const idx = resolveIdx(e.clientX, svg)
+      if (idx === null) { setHover(null); return }
+      const ctm = svg.getScreenCTM()!
       const dataPointVbX = PADDING.left + idx * stepX
       const dataPointPt = svg.createSVGPoint()
       dataPointPt.x = dataPointVbX
@@ -171,15 +195,25 @@ function LineSvg({
       const wrapRect = wrap.getBoundingClientRect()
       setHover({ idx, tooltipLeftPx: screen.x - wrapRect.left })
     }
+
     const onLeave = () => setHover(null)
+
+    const onClick = (e: MouseEvent) => {
+      const idx = resolveIdx(e.clientX, svg)
+      if (idx === null) return
+      onDayClick(data[idx].day)
+    }
+
     svg.addEventListener('mousemove', onMove)
     svg.addEventListener('mouseleave', onLeave)
+    svg.addEventListener('click', onClick)
     return () => {
       svg.removeEventListener('mousemove', onMove)
       svg.removeEventListener('mouseleave', onLeave)
+      svg.removeEventListener('click', onClick)
     }
     // xFor + yFor close over stepX, so stepX covers them.
-  }, [data, stepX])
+  }, [data, stepX, onDayClick])
 
   const hovered = hover !== null ? data[hover.idx] : null
   const hoverX = hover !== null ? xFor(hover.idx) : 0
@@ -193,9 +227,9 @@ function LineSvg({
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VB_W} ${VB_H}`}
-        className="h-[240px] w-full"
+        className="h-[240px] w-full cursor-pointer"
         role="img"
-        aria-label="Conversas por dia"
+        aria-label="Conversas por dia — clique num ponto para ver detalhes"
       >
         {/* Y-axis gridlines + labels */}
         {ticks.map((t) => {
@@ -268,8 +302,8 @@ function LineSvg({
               stroke="var(--muted-foreground)"
               strokeDasharray="3 3"
             />
-            <circle cx={hoverX} cy={yFor(data[hover.idx].incoming)} r={3.5} fill="#3b82f6" />
-            <circle cx={hoverX} cy={yFor(data[hover.idx].outgoing)} r={3.5} fill="#7c3aed" />
+            <circle cx={hoverX} cy={yFor(data[hover.idx].incoming)} r={5} fill="#3b82f6" />
+            <circle cx={hoverX} cy={yFor(data[hover.idx].outgoing)} r={5} fill="#7c3aed" />
           </g>
         )}
       </svg>
@@ -294,9 +328,144 @@ function LineSvg({
               {hovered.outgoing} enviadas
             </span>
           </div>
+          <div className="mt-1.5 border-t border-border pt-1 text-[10px] text-muted-foreground">
+            Clique para ver conversas
+          </div>
         </div>
       )}
     </div>
+  )
+}
+
+// ------------------------------------------------------------
+// Modal that shows conversations with activity on a given day
+// ------------------------------------------------------------
+
+function DayDetailModal({ day, onClose }: { day: string; onClose: () => void }) {
+  const [rows, setRows] = useState<DayConvo[] | null>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+    ;(async () => {
+      const [y, m, d] = day.split('-').map(Number)
+      const start = new Date(y, m - 1, d)
+      const end = new Date(y, m - 1, d + 1)
+
+      const { data: msgs } = await supabase
+        .from('messages')
+        .select('conversation_id, sender_type')
+        .gte('created_at', start.toISOString())
+        .lt('created_at', end.toISOString())
+
+      if (!msgs || msgs.length === 0) {
+        setRows([])
+        return
+      }
+
+      // Group message counts by conversation
+      const countMap = new Map<string, { incoming: number; outgoing: number }>()
+      for (const msg of msgs) {
+        const entry = countMap.get(msg.conversation_id) ?? { incoming: 0, outgoing: 0 }
+        if (msg.sender_type === 'customer') entry.incoming++
+        else entry.outgoing++
+        countMap.set(msg.conversation_id, entry)
+      }
+
+      const ids = [...countMap.keys()]
+      const { data: convos } = await supabase
+        .from('conversations')
+        .select('id, status, contacts(name, phone)')
+        .in('id', ids)
+
+      if (!convos) {
+        setRows([])
+        return
+      }
+
+      setRows(
+        convos.map((c) => {
+          const contact = Array.isArray(c.contacts) ? c.contacts[0] : c.contacts
+          const counts = countMap.get(c.id) ?? { incoming: 0, outgoing: 0 }
+          return {
+            id: c.id,
+            status: c.status ?? 'open',
+            contactName: (contact as { name?: string } | null)?.name ?? '',
+            contactPhone: (contact as { phone?: string } | null)?.phone ?? '',
+            incoming: counts.incoming,
+            outgoing: counts.outgoing,
+          }
+        }),
+      )
+    })()
+  }, [day])
+
+  const statusLabel: Record<string, string> = {
+    open: 'Aberto',
+    pending: 'Pendente',
+    closed: 'Fechado',
+  }
+  const statusClass: Record<string, string> = {
+    open: 'bg-emerald-500/15 text-emerald-400',
+    pending: 'bg-amber-500/15 text-amber-400',
+    closed: 'bg-muted text-muted-foreground',
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{longDayLabel(day)}</DialogTitle>
+          <DialogDescription>
+            Conversas com atividade neste dia
+          </DialogDescription>
+        </DialogHeader>
+
+        {rows === null ? (
+          <div className="space-y-2 py-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-14 animate-pulse rounded-lg bg-muted" />
+            ))}
+          </div>
+        ) : rows.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Nenhuma conversa encontrada neste dia.
+          </p>
+        ) : (
+          <ul className="max-h-[400px] divide-y divide-border overflow-y-auto">
+            {rows.map((row) => (
+              <li key={row.id} className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {row.contactName || row.contactPhone || 'Contato desconhecido'}
+                  </p>
+                  {row.contactName && (
+                    <p className="text-xs text-muted-foreground">{row.contactPhone}</p>
+                  )}
+                  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />
+                      {row.incoming} recebidas
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-violet-500" />
+                      {row.outgoing} enviadas
+                    </span>
+                  </div>
+                </div>
+                <span
+                  className={cn(
+                    'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                    statusClass[row.status] ?? statusClass.open,
+                  )}
+                >
+                  {statusLabel[row.status] ?? row.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 

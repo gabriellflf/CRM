@@ -13,6 +13,7 @@ import {
   LayoutTemplate,
   ImageOff,
   CornerDownLeft,
+  StickyNote,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ReplyQuote } from "./reply-quote";
@@ -248,6 +249,17 @@ export function MessageBubble({
   currentUserId,
   onToggleReaction,
 }: MessageBubbleProps) {
+  if (message.is_note) {
+    return (
+      <div className="flex justify-center px-4 py-1">
+        <div className="flex max-w-sm items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+          <StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span className="whitespace-pre-wrap break-words">{message.content_text}</span>
+        </div>
+      </div>
+    );
+  }
+
   const isAgent = message.sender_type === "agent" || message.sender_type === "bot";
   const time = format(new Date(message.created_at), "HH:mm");
 

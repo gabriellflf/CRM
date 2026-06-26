@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus } from "@/types";
-import { Search, ChevronDown } from "lucide-react";
+import { Search, ChevronDown, Users } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,6 +15,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+
+interface Operator {
+  user_id: string;
+  full_name: string;
+}
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -55,6 +60,8 @@ export function ConversationList({
 }: ConversationListProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>("all");
+  const [operatorFilter, setOperatorFilter] = useState<string>("all");
+  const [operators, setOperators] = useState<Operator[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Keep the latest callback in a ref so the fetch effect below can
@@ -110,6 +117,26 @@ export function ConversationList({
     // up on any events sent while the WS was disconnected or throttled.
   }, [resyncToken]);
 
+  useEffect(() => {
+    const supabase = createClient();
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("account_id")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+      if (!profile?.account_id) return;
+      const { data } = await supabase
+        .from("profiles")
+        .select("user_id, full_name")
+        .eq("account_id", profile.account_id)
+        .order("full_name");
+      setOperators(data ?? []);
+    })();
+  }, []);
+
   const filtered = useMemo(() => {
     let result = conversations;
 
@@ -117,6 +144,10 @@ export function ConversationList({
       result = result.filter((c) => c.unread_count > 0);
     } else if (filter !== "all") {
       result = result.filter((c) => c.status === filter);
+    }
+
+    if (operatorFilter !== "all") {
+      result = result.filter((c) => c.assigned_agent_id === operatorFilter);
     }
 
     if (search.trim()) {
@@ -130,7 +161,7 @@ export function ConversationList({
     }
 
     return result;
-  }, [conversations, filter, search]);
+  }, [conversations, filter, operatorFilter, search]);
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -165,31 +196,55 @@ export function ConversationList({
           />
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted">
-              {activeFilter?.label ?? "Todos"}
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted">
+                {activeFilter?.label ?? "Todos"}
+                <ChevronDown className="h-3 w-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="border-border bg-popover">
+              {FILTER_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onClick={() => setFilter(opt.value)}
+                  className={cn("text-sm", filter === opt.value ? "text-primary" : "text-popover-foreground")}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger className={cn(
+              "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+              operatorFilter !== "all" ? "text-primary" : "text-muted-foreground hover:text-foreground"
+            )}>
+              <Users className="h-3 w-3" />
+              {operatorFilter === "all"
+                ? "Operadores"
+                : operators.find(o => o.user_id === operatorFilter)?.full_name ?? "Operadores"}
               <ChevronDown className="h-3 w-3" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="border-border bg-popover"
-          >
-            {FILTER_OPTIONS.map((opt) => (
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="border-border bg-popover">
               <DropdownMenuItem
-                key={opt.value}
-                onClick={() => setFilter(opt.value)}
-                className={cn(
-                  "text-sm",
-                  filter === opt.value
-                    ? "text-primary"
-                    : "text-popover-foreground"
-                )}
+                onClick={() => setOperatorFilter("all")}
+                className={cn("text-sm", operatorFilter === "all" ? "text-primary" : "text-popover-foreground")}
               >
-                {opt.label}
+                Todos os operadores
               </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              {operators.map((op) => (
+                <DropdownMenuItem
+                  key={op.user_id}
+                  onClick={() => setOperatorFilter(op.user_id)}
+                  className={cn("text-sm", operatorFilter === op.user_id ? "text-primary" : "text-popover-foreground")}
+                >
+                  {op.full_name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Conversation Items.
@@ -255,17 +310,17 @@ function ConversationItem({
     <button
       onClick={handleClick}
       className={cn(
-        "flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50",
+        "flex w-full items-start gap-4 px-5 py-6 text-left transition-colors hover:bg-muted/50",
         isActive && "border-l-2 border-primary bg-muted/70"
       )}
     >
       {/* Avatar */}
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-semibold text-foreground">
         {contact?.avatar_url ? (
           <img
             src={contact.avatar_url}
             alt={displayName}
-            className="h-10 w-10 rounded-full object-cover"
+            className="h-14 w-14 rounded-full object-cover"
           />
         ) : (
           initials
@@ -274,44 +329,42 @@ function ConversationItem({
 
       {/* Content */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-medium text-foreground">
+        <div className="flex items-start justify-between gap-2">
+          <span className="truncate text-base font-semibold text-foreground">
             {displayName}
           </span>
           <div className="flex shrink-0 flex-wrap justify-end gap-1">
             {tags.length > 0 ? tags.map((tag) => (
               <span
                 key={tag.id}
-                className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
                 style={{ backgroundColor: `${tag.color}20`, color: tag.color, border: `1px solid ${tag.color}40` }}
               >
                 {tag.name}
               </span>
             )) : (
-              <span className="text-[10px] text-muted-foreground">{timeAgo}</span>
+              <span className="text-xs text-muted-foreground">{timeAgo}</span>
             )}
           </div>
         </div>
-        <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className="truncate text-xs text-muted-foreground">
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="truncate text-sm text-muted-foreground">
             {conversation.last_message_text || "Sem mensagens ainda"}
           </p>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-2">
             {tags.length > 0 && (
-              <span className="text-[10px] text-muted-foreground">{timeAgo}</span>
+              <span className="text-xs text-muted-foreground">{timeAgo}</span>
             )}
-            {conversation.unread_count > 0 && (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+            {conversation.unread_count > 0 ? (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-bold text-primary-foreground">
                 {conversation.unread_count}
               </span>
+            ) : (
+              <span
+                className={cn("h-2.5 w-2.5 rounded-full", STATUS_COLORS[conversation.status])}
+                title={conversation.status}
+              />
             )}
-            <span
-              className={cn(
-                "h-2 w-2 rounded-full",
-                STATUS_COLORS[conversation.status]
-              )}
-              title={conversation.status}
-            />
           </div>
         </div>
       </div>

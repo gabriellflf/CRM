@@ -170,49 +170,56 @@ export async function loadPipelineDonut(db: DB): Promise<PipelineDonutData> {
 // --- 4. Response time by day of week ----------------------------------
 
 export async function loadResponseTime(db: DB): Promise<ResponseTimeSummary> {
-  // Pull the last 14 days of messages in one shot, then walk per
-  // conversation to find each "first inbound" → "first subsequent
-  // outbound" pair. 14 days gives us both "this week" + "last week"
-  // with enough overlap if the user opens the dashboard late on a
-  // Monday.
+  // Pull 14 days of messages + conversations.created_at to identify
+  // "new" conversations (opened within the same 14-day window).
+  // Only the first customer→agent pair per NEW conversation is counted.
   const fourteenDaysAgo = daysAgoStart(13).toISOString()
-  const { data, error } = await db
-    .from('messages')
-    .select('conversation_id, sender_type, created_at')
-    .gte('created_at', fourteenDaysAgo)
-    .order('conversation_id', { ascending: true })
-    .order('created_at', { ascending: true })
-  if (error) throw error
 
-  const rows = (data ?? []) as {
+  const [msgRes, convRes] = await Promise.all([
+    db
+      .from('messages')
+      .select('conversation_id, sender_type, created_at')
+      .gte('created_at', fourteenDaysAgo)
+      .order('conversation_id', { ascending: true })
+      .order('created_at', { ascending: true }),
+    db
+      .from('conversations')
+      .select('id, created_at')
+      .gte('created_at', fourteenDaysAgo),
+  ])
+  if (msgRes.error) throw msgRes.error
+
+  // Set of conversations that opened within the 14-day window
+  const newConvIds = new Set((convRes.data ?? []).map((c: { id: string }) => c.id))
+
+  const rows = (msgRes.data ?? []) as {
     conversation_id: string
     sender_type: string
     created_at: string
   }[]
 
-  // Group per conversation, pair unreplied customer messages with the
-  // next outbound message from the agent/bot. A single customer message
-  // can only count once (avoids inflating averages if the customer
-  // double-messages while the agent takes time to reply).
-  interface Sample {
-    customerAt: Date
-    responseAt: Date
-  }
+  // One sample per new conversation: first customer message → first agent reply
+  interface Sample { customerAt: Date; responseAt: Date }
   const samples: Sample[] = []
 
   let currentConv = ''
   let pendingCustomer: Date | null = null
+  const doneConvs = new Set<string>()
+
   for (const row of rows) {
+    if (!newConvIds.has(row.conversation_id)) continue
     if (row.conversation_id !== currentConv) {
       currentConv = row.conversation_id
       pendingCustomer = null
     }
+    if (doneConvs.has(currentConv)) continue
     const ts = new Date(row.created_at)
     if (row.sender_type === 'customer') {
       if (!pendingCustomer) pendingCustomer = ts
     } else if (pendingCustomer) {
       samples.push({ customerAt: pendingCustomer, responseAt: ts })
       pendingCustomer = null
+      doneConvs.add(currentConv)
     }
   }
 
@@ -263,7 +270,80 @@ export async function loadResponseTime(db: DB): Promise<ResponseTimeSummary> {
   }
 }
 
-// --- 5. Activity feed --------------------------------------------------
+// --- 5. Average response time (all pairs, not just first) -------------
+
+export async function loadAvgResponseTime(db: DB): Promise<ResponseTimeSummary> {
+  const fourteenDaysAgo = daysAgoStart(13).toISOString()
+  const { data, error } = await db
+    .from('messages')
+    .select('conversation_id, sender_type, created_at')
+    .gte('created_at', fourteenDaysAgo)
+    .order('conversation_id', { ascending: true })
+    .order('created_at', { ascending: true })
+  if (error) throw error
+
+  const rows = (data ?? []) as {
+    conversation_id: string
+    sender_type: string
+    created_at: string
+  }[]
+
+  interface Sample { customerAt: Date; responseAt: Date }
+  const samples: Sample[] = []
+
+  let currentConv = ''
+  let pendingCustomer: Date | null = null
+
+  for (const row of rows) {
+    if (row.conversation_id !== currentConv) {
+      currentConv = row.conversation_id
+      pendingCustomer = null
+    }
+    const ts = new Date(row.created_at)
+    if (row.sender_type === 'customer') {
+      // Record every new unanswered customer message (not just the first)
+      if (!pendingCustomer) pendingCustomer = ts
+    } else {
+      if (pendingCustomer) {
+        samples.push({ customerAt: pendingCustomer, responseAt: ts })
+        pendingCustomer = null
+      }
+    }
+  }
+
+  const now = new Date()
+  const thisWeekStart = daysAgoStart(mondayIndex(now))
+  const lastWeekStart = daysAgoStart(mondayIndex(now) + 7)
+
+  const byDow = new Map<number, number[]>()
+  for (let i = 0; i < 7; i++) byDow.set(i, [])
+  const thisWeekMins: number[] = []
+  const lastWeekMins: number[] = []
+
+  for (const s of samples) {
+    const diffMin = (s.responseAt.getTime() - s.customerAt.getTime()) / 60_000
+    if (diffMin < 0) continue
+    const dow = mondayIndex(s.customerAt)
+    byDow.get(dow)!.push(diffMin)
+    if (s.customerAt >= thisWeekStart) {
+      thisWeekMins.push(diffMin)
+    } else if (s.customerAt >= lastWeekStart && s.customerAt < thisWeekStart) {
+      lastWeekMins.push(diffMin)
+    }
+  }
+
+  const avg = (arr: number[]) =>
+    arr.length === 0 ? null : arr.reduce((a, b) => a + b, 0) / arr.length
+
+  const buckets: ResponseTimeBucket[] = Array.from({ length: 7 }, (_, dow) => {
+    const s = byDow.get(dow) ?? []
+    return { dow, avgMinutes: avg(s), samples: s.length }
+  })
+
+  return { buckets, thisWeekAvg: avg(thisWeekMins), lastWeekAvg: avg(lastWeekMins) }
+}
+
+// --- 6. Activity feed --------------------------------------------------
 
 export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> {
   // Pull ~10 from each source (plenty of headroom after merge-sort),

@@ -30,6 +30,7 @@ import {
   Label,
   BarChart as RechartsBarChart,
   Legend as RechartsLegend,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -90,12 +91,17 @@ const renderShape = (
     width = Math.abs(width)
   }
 
+  const overThreshold =
+    payload.threshold != null &&
+    (payload.actualMinutes ?? value) > payload.threshold
+
   return (
     <rect
       x={x}
       y={y}
       width={width}
       height={height}
+      fill={overThreshold ? '#ef4444' : undefined}
       opacity={
         activeBar || (activeLegend && activeLegend !== name)
           ? deepEqual(activeBar, { ...payload, value })
@@ -548,6 +554,8 @@ interface BarChartProps extends React.HTMLAttributes<HTMLDivElement> {
   autoMinValue?: boolean
   minValue?: number
   maxValue?: number
+  referenceLineX?: number
+  xAxisTicks?: number[]
   allowDecimals?: boolean
   onValueChange?: (value: BarChartEventProps) => void
   enableLegendSlider?: boolean
@@ -581,6 +589,8 @@ const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(
       autoMinValue = false,
       minValue,
       maxValue,
+      referenceLineX,
+      xAxisTicks,
       allowDecimals = true,
       className,
       onValueChange,
@@ -676,7 +686,7 @@ const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(
             margin={{
               bottom: xAxisLabel ? 30 : undefined,
               left: yAxisLabel ? 20 : undefined,
-              right: yAxisLabel ? 5 : undefined,
+              right: layout === "vertical" ? 0 : (yAxisLabel ? 5 : undefined),
               top: 5,
             }}
             stackOffset={type === "percent" ? "expand" : undefined}
@@ -724,6 +734,7 @@ const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(
                     tickFormatter:
                       type === "percent" ? valueToPercent : valueFormatter,
                     allowDecimals: allowDecimals,
+                    ...(xAxisTicks ? { ticks: xAxisTicks } : {}),
                   })}
             >
               {xAxisLabel && (
@@ -877,6 +888,14 @@ const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(
                 onClick={onBarClick}
               />
             ))}
+            {referenceLineX != null && layout === "vertical" && (
+              <ReferenceLine
+                x={referenceLineX}
+                stroke="#ef4444"
+                strokeDasharray="4 4"
+                strokeWidth={2}
+              />
+            )}
           </RechartsBarChart>
         </ResponsiveContainer>
       </div>

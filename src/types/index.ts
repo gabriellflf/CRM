@@ -97,6 +97,8 @@ export interface Contact {
   name?: string;
   email?: string;
   company?: string;
+  cpf?: string;
+  description?: string;
   avatar_url?: string;
   created_at: string;
   updated_at: string;
@@ -185,6 +187,7 @@ export interface Message {
   status: MessageStatus;
   created_at: string;
   reply_to_message_id?: string;
+  is_note?: boolean;
   /**
    * Only set when `content_type === 'interactive'` — the stable id of
    * the button or list row the customer tapped. The Flows engine uses

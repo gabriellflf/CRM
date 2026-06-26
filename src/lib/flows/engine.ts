@@ -436,6 +436,7 @@ async function executeHandoff(
   node: FlowNodeRow,
 ): Promise<void> {
   const cfg = node.config as { assign_to?: string; note?: string };
+  console.log("[flow engine] executeHandoff cfg:", JSON.stringify(cfg));
   const convUpdate: Record<string, unknown> = {
     status: "pending",
     updated_at: new Date().toISOString(),
@@ -446,6 +447,17 @@ async function executeHandoff(
       .from("conversations")
       .update(convUpdate)
       .eq("id", run.conversation_id);
+    if (cfg.note && cfg.note.trim()) {
+      const { error: noteErr } = await db.from("messages").insert({
+        conversation_id: run.conversation_id,
+        sender_type: "bot",
+        content_type: "text",
+        content_text: cfg.note.trim(),
+        is_note: true,
+        status: "sent",
+      });
+      if (noteErr) console.error("[flow engine] failed to insert note:", noteErr);
+    }
   }
   await logEvent(db, run.id, "handoff", node.node_key, {
     note: cfg.note ?? null,

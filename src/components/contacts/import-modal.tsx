@@ -404,28 +404,22 @@ export function ImportModal({
             <DialogTitle className="text-lg text-popover-foreground">
               Importar contatos
             </DialogTitle>
-            <DialogDescription className="leading-relaxed text-muted-foreground">
-              Envie um CSV com a coluna obrigatória{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                phone
-              </code>{' '}
-              . Opcional:{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                name
-              </code>
-              ,{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                email
-              </code>
-              ,{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                company
-              </code>
-              ,{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                tags
-              </code>{' '}
-              (separado por vírgula; use aspas para células com múltiplas tags).
+            <DialogDescription>
+              <span className="block space-y-1.5 text-sm leading-relaxed text-muted-foreground">
+                <span className="block">
+                  Obrigatórios:{' '}
+                  {['name', 'phone', 'cpf', 'tags'].map((col) => (
+                    <code key={col} className="mx-0.5 rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">{col}</code>
+                  ))}
+                </span>
+                <span className="block">
+                  Opcionais:{' '}
+                  {['email', 'company', 'description'].map((col) => (
+                    <code key={col} className="mx-0.5 rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">{col}</code>
+                  ))}
+                </span>
+                <span className="block text-xs">Para múltiplas tags na mesma célula, separe por vírgula entre aspas.</span>
+              </span>
             </DialogDescription>
           </DialogHeader>
 

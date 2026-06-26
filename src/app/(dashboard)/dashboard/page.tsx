@@ -13,6 +13,7 @@ import {
 
 import {
   loadActivity,
+  loadAvgResponseTime,
   loadConversationsSeries,
   loadMetrics,
   loadPipelineDonut,
@@ -58,6 +59,9 @@ export default function DashboardPage() {
   const [responseTime, setResponseTime] = useState<ResponseTimeSummary | null>(null)
   const [responseTimeLoading, setResponseTimeLoading] = useState(true)
 
+  const [avgResponseTime, setAvgResponseTime] = useState<ResponseTimeSummary | null>(null)
+  const [avgResponseTimeLoading, setAvgResponseTimeLoading] = useState(true)
+
   const [activity, setActivity] = useState<ActivityItem[] | null>(null)
   const [activityLoading, setActivityLoading] = useState(true)
 
@@ -86,6 +90,11 @@ export default function DashboardPage() {
       .then((r) => setResponseTime(r))
       .catch((err) => console.error('[dashboard] response time failed:', err))
       .finally(() => setResponseTimeLoading(false))
+
+    void loadAvgResponseTime(db)
+      .then((r) => setAvgResponseTime(r))
+      .catch((err) => console.error('[dashboard] avg response time failed:', err))
+      .finally(() => setAvgResponseTimeLoading(false))
 
     // Fetch up to 50 so the biggest page-size option in the feed
     // (50 rows) is already in memory — switching sizes then becomes
@@ -209,8 +218,21 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Response time */}
-      <ResponseTimeChart data={responseTime} loading={responseTimeLoading} />
+      {/* Response time charts — side by side */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ResponseTimeChart
+          data={responseTime}
+          loading={responseTimeLoading}
+          title="Tempo Médio de Primeira Resposta"
+          subtitle="Tempo até a primeira resposta do agente em cada conversa"
+        />
+        <ResponseTimeChart
+          data={avgResponseTime}
+          loading={avgResponseTimeLoading}
+          title="Tempo Médio de Resposta"
+          subtitle="Tempo médio para responder qualquer mensagem do cliente"
+        />
+      </div>
 
       {/* Activity feed */}
       <ActivityFeed items={activity} loading={activityLoading} />
