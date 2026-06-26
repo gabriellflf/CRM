@@ -13,9 +13,11 @@ import {
   PauseCircle,
   ChevronDown,
   ChevronRight,
+  Phone,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format, formatDistanceToNow } from "date-fns";
+import { format, formatDuration, intervalToDuration } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -221,13 +223,21 @@ function RunCard({
 }) {
   const meta = STATUS_META[run.status];
   const StatusIcon = meta.icon;
-  const contactLabel =
-    run.contact?.name?.trim() || run.contact?.phone || "Contato desconhecido";
-  const duration = run.ended_at
-    ? formatDistanceToNow(new Date(run.ended_at), {
-        addSuffix: false,
-      })
-    : null;
+  const contactName = run.contact?.name?.trim() || null;
+  const contactPhone = run.contact?.phone || null;
+  const contactLabel = contactName || contactPhone || "Contato desconhecido";
+
+  const duration =
+    run.started_at && run.ended_at
+      ? formatDuration(
+          intervalToDuration({
+            start: new Date(run.started_at),
+            end: new Date(run.ended_at),
+          }),
+          { locale: ptBR, delimiter: ", " },
+        ) || "menos de 1 segundo"
+      : null;
+
   return (
     <div className="rounded-lg border border-border bg-card">
       <button
@@ -245,22 +255,28 @@ function RunCard({
             <span className="truncate text-sm font-medium text-foreground">
               {contactLabel}
             </span>
+            {contactName && contactPhone && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                <Phone className="h-3 w-3" />
+                {contactPhone}
+              </span>
+            )}
             <Badge variant="outline" className={cn("gap-1", meta.classes)}>
               <StatusIcon className="h-3 w-3" />
               {meta.label}
             </Badge>
             {run.status === "active" && run.current_node_key && (
               <code className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                em {run.current_node_key}
+                aguardando: {run.current_node_key}
               </code>
             )}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-            <span>Iniciado em {format(new Date(run.started_at), "PP p")}</span>
+            <span>Iniciado em {format(new Date(run.started_at), "dd/MM/yyyy 'às' HH:mm")}</span>
             {run.reprompt_count > 0 && (
-              <span>· {run.reprompt_count} re-envios</span>
+              <span>· {run.reprompt_count} reenvio{run.reprompt_count > 1 ? "s" : ""}</span>
             )}
-            {duration && <span>· durou {duration}</span>}
+            {duration && <span>· duração: {duration}</span>}
           </div>
         </div>
       </button>
@@ -291,50 +307,51 @@ function RunCard({
   );
 }
 
-const EVENT_COLOR: Record<string, string> = {
-  started: "text-emerald-300",
-  node_entered: "text-muted-foreground",
-  message_sent: "text-sky-300",
-  reply_received: "text-primary",
-  fallback_fired: "text-amber-300",
-  handoff: "text-amber-300",
-  timeout: "text-muted-foreground",
-  error: "text-red-300",
-  completed: "text-emerald-300",
+const EVENT_LABEL: Record<string, { label: string; cls: string }> = {
+  started:       { label: "Fluxo iniciado",          cls: "text-emerald-300" },
+  node_entered:  { label: "Entrou no nó",             cls: "text-muted-foreground" },
+  message_sent:  { label: "Mensagem enviada",         cls: "text-sky-300" },
+  reply_received:{ label: "Cliente respondeu",        cls: "text-primary" },
+  fallback_fired:{ label: "Resposta inválida",        cls: "text-amber-300" },
+  handoff:       { label: "Transferido para agente",  cls: "text-amber-300" },
+  timeout:       { label: "Tempo esgotado",           cls: "text-muted-foreground" },
+  error:         { label: "Erro",                     cls: "text-red-300" },
+  completed:     { label: "Fluxo concluído",          cls: "text-emerald-300" },
 };
 
+function humanPayload(ev: EventRow): string {
+  const p = ev.payload;
+  if (ev.event_type === "reply_received" && p.reply_id)
+    return `botão: "${String(p.reply_id)}"`;
+  if (ev.event_type === "reply_received" && p.text)
+    return `texto: "${String(p.text).slice(0, 60)}"`;
+  if (ev.event_type === "handoff" && p.note)
+    return `nota: "${String(p.note).slice(0, 80)}"`;
+  if (ev.event_type === "fallback_fired" && p.reason)
+    return `motivo: ${String(p.reason)}`;
+  if (ev.event_type === "node_entered" && p.advancing_to)
+    return `→ ${String(p.advancing_to)}`;
+  if (p.captured_key)
+    return `capturou: ${String(p.captured_key)}`;
+  return "";
+}
+
 function EventLine({ ev }: { ev: EventRow }) {
-  const cls = EVENT_COLOR[ev.event_type] ?? "text-muted-foreground";
+  const meta = EVENT_LABEL[ev.event_type] ?? { label: ev.event_type, cls: "text-muted-foreground" };
+  const detail = humanPayload(ev);
   return (
-    <div className="flex items-start gap-2 rounded-md px-2 py-1 text-xs">
-      <span className="w-32 shrink-0 text-[10px] text-muted-foreground">
+    <div className="flex items-start gap-3 rounded-md px-2 py-1.5 text-xs odd:bg-muted/20">
+      <span className="w-16 shrink-0 text-[10px] tabular-nums text-muted-foreground">
         {format(new Date(ev.created_at), "HH:mm:ss")}
       </span>
-      <span className={cn("w-32 shrink-0 font-mono text-[10px]", cls)}>
-        {ev.event_type}
+      <span className={cn("shrink-0 text-[11px] font-medium", meta.cls)}>
+        {meta.label}
       </span>
-      {ev.node_key && (
-        <code className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">
-          {ev.node_key}
-        </code>
-      )}
-      {Object.keys(ev.payload).length > 0 && (
-        <span className="min-w-0 truncate text-[10px] text-muted-foreground">
-          {summarizePayload(ev.payload)}
+      {detail && (
+        <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+          {detail}
         </span>
       )}
     </div>
   );
-}
-
-function summarizePayload(payload: Record<string, unknown>): string {
-  // Show the keys that matter most to a human debugger; full JSON is
-  // available via the "Captured vars" details panel for the run.
-  const keys = ["reply_id", "captured_key", "reason", "advancing_to"];
-  for (const k of keys) {
-    if (k in payload && payload[k] !== null && payload[k] !== undefined) {
-      return `${k}=${String(payload[k]).slice(0, 80)}`;
-    }
-  }
-  return "";
 }
