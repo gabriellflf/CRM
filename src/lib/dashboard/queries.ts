@@ -40,6 +40,8 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
     newContactsToday,
     newContactsYesterday,
     openDeals,
+    openDealsToday,
+    openDealsYesterday,
     messagesToday,
     messagesYesterday,
   ] = await Promise.all([
@@ -62,6 +64,8 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
       .gte('created_at', yesterdayStart)
       .lt('created_at', todayStart),
     db.from('deals').select('value, status').eq('status', 'open'),
+    db.from('deals').select('value').eq('status', 'open').gte('created_at', todayStart),
+    db.from('deals').select('value').eq('status', 'open').gte('created_at', yesterdayStart).lt('created_at', todayStart),
     db
       .from('messages')
       .select('id', { count: 'exact', head: true })
@@ -79,13 +83,12 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
 
   const openDealsRows = (openDeals.data ?? []) as { value: number | null }[]
   const openDealsValue = openDealsRows.reduce((sum, d) => sum + (d.value ?? 0), 0)
+  const dealsTodayValue = ((openDealsToday.data ?? []) as { value: number | null }[]).reduce((s, d) => s + (d.value ?? 0), 0)
+  const dealsYesterdayValue = ((openDealsYesterday.data ?? []) as { value: number | null }[]).reduce((s, d) => s + (d.value ?? 0), 0)
 
   return {
     activeConversations: {
       current: openConvCur.count ?? 0,
-      // "vs yesterday" on a current-state count has no clean answer
-      // without snapshots — we show the delta in NEW open conversations
-      // today vs yesterday. That's the business-meaningful daily signal.
       previous: (newConvToday.count ?? 0) - (newConvYesterday.count ?? 0),
     },
     newContactsToday: {
@@ -94,6 +97,7 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
     },
     openDealsValue,
     openDealsCount: openDealsRows.length,
+    openDealsValueDelta: dealsTodayValue - dealsYesterdayValue,
     messagesSentToday: {
       current: messagesToday.count ?? 0,
       previous: messagesYesterday.count ?? 0,

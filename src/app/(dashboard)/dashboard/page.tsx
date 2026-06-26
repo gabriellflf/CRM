@@ -206,7 +206,14 @@ export default function DashboardPage() {
               title="Valor de Negócios Abertos"
               value={formatCurrency(metrics.openDealsValue, defaultCurrency)}
               icon={DollarSign}
-              subtitle={`${metrics.openDealsCount} negócio${metrics.openDealsCount === 1 ? '' : 's'} aberto${metrics.openDealsCount === 1 ? '' : 's'}`}
+              delta={{
+                sign: metrics.openDealsValueDelta,
+                label: deltaLabel(
+                  metrics.openDealsValueDelta,
+                  `em novos negócios vs ontem`,
+                  `${metrics.openDealsCount} negócio${metrics.openDealsCount === 1 ? '' : 's'} aberto${metrics.openDealsCount === 1 ? '' : 's'}`,
+                ),
+              }}
               onClick={() => openModal('deals')}
             />
             <MetricCard
