@@ -126,8 +126,8 @@ export interface CollectInputNodeConfig {
    */
   var_key: string;
   /**
-   * Reserved for v2. Accepted on the config but ignored by the v1.5
-   * runner — captures any non-empty text.
+   * When set, the engine validates the customer's reply before capturing.
+   * Invalid replies trigger an error message + reprompt without advancing.
    */
   validation?: "any" | "email" | "phone" | "regex";
   /** Used only when `validation === 'regex'`. */

@@ -519,6 +519,23 @@ async function evaluateConditionNode(
   });
 }
 
+const VALIDATION_MESSAGES: Record<string, string> = {
+  email: "Formato inválido. Por favor, digite um e-mail válido (ex: nome@exemplo.com).",
+  phone: "Formato inválido. Por favor, digite um número de telefone válido.",
+  regex: "Formato inválido. Por favor, tente novamente.",
+};
+
+function validateInput(value: string, cfg: CollectInputNodeConfig): boolean {
+  const type = cfg.validation ?? "any";
+  if (type === "any" || !type) return true;
+  if (type === "email") return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  if (type === "phone") return /^[\d\s\+\-\(\)]{7,20}$/.test(value);
+  if (type === "regex" && cfg.regex) {
+    try { return new RegExp(cfg.regex).test(value); } catch { return true; }
+  }
+  return true;
+}
+
 /**
  * Tiny `{{vars.foo}}` interpolation. Used by send_message + collect_input
  * prompt text so a captured `name` can show up in the next prompt
@@ -949,6 +966,38 @@ async function handleReplyForActiveRun(
     const cfg = currentNode.config as unknown as CollectInputNodeConfig;
     const captured = message.text.trim();
     if (captured.length > 0 && cfg.var_key) {
+      if (!validateInput(captured, cfg)) {
+        // Invalid format — send error message and reprompt without advancing.
+        const errorMsg = VALIDATION_MESSAGES[cfg.validation ?? ""] ?? VALIDATION_MESSAGES.regex;
+        try {
+          await engineSendText({
+            accountId: run.account_id,
+            userId: run.user_id,
+            conversationId: run.conversation_id!,
+            contactId: run.contact_id!,
+            text: errorMsg,
+          });
+          await engineSendText({
+            accountId: run.account_id,
+            userId: run.user_id,
+            conversationId: run.conversation_id!,
+            contactId: run.contact_id!,
+            text: interpolateVars(cfg.prompt_text, run.vars),
+          });
+        } catch (err) {
+          await logEvent(db, run.id, "error", currentNode.node_key, {
+            reason: "validation_reprompt_failed",
+            detail: err instanceof Error ? err.message : String(err),
+          });
+        }
+        await logEvent(db, run.id, "fallback_fired", currentNode.node_key, {
+          reason: "validation_failed",
+          validation_type: cfg.validation,
+        });
+        await db.from("flow_runs").update({ reprompt_count: run.reprompt_count + 1 }).eq("id", run.id);
+        return { consumed: true, flow_run_id: run.id, outcome: "fallback_fired" };
+      }
+
       // Persist captured value + reset reprompt count atomically.
       const newVars = { ...run.vars, [cfg.var_key]: captured };
       const { error: capErr } = await db
