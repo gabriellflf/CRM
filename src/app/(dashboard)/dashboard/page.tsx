@@ -245,8 +245,8 @@ export default function DashboardPage() {
           stretched height so their rounded borders line up. Without
           this, the pipeline card rendered at its natural (shorter)
           height while the line chart drove the row height. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <div className="h-full lg:col-span-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="h-full">
           <ConversationsChart
             series={series}
             loading={seriesLoading}
@@ -254,7 +254,7 @@ export default function DashboardPage() {
             onRangeChange={handleRangeChange}
           />
         </div>
-        <div className="h-full lg:col-span-2">
+        <div className="h-full">
           <PipelineDonut
             data={pipeline}
             loading={pipelineLoading}
