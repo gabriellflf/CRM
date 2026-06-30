@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef, type ReactNode } from 'react';
-
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/use-auth';
 import {
   RAIL_GROUPS,
   SECTION_META,
@@ -10,17 +10,8 @@ import {
   type SettingsSection,
 } from './settings-sections';
 
-// Width at/above which the rail is a vertical column (already in view, so
-// no auto-scroll needed). Mirrors the Tailwind `lg:` breakpoint that
-// drives the row→column switch in the markup below — keep the two in sync.
 const RAIL_DESKTOP_MIN_PX = 1024;
 
-/**
- * The settings left rail — grouped, vertical on desktop and a
- * horizontal scroller on narrow screens (mirrors the mockup's ≤920px
- * behaviour). The active item auto-scrolls into view when the rail is
- * horizontal so a deep-linked section is never off-screen.
- */
 export function SettingsRail({
   active,
   onSelect,
@@ -30,10 +21,10 @@ export function SettingsRail({
   onSelect: (section: SettingsSection) => void;
   hints?: Partial<Record<SettingsSection, ReactNode>>;
 }) {
+  const { accountRole } = useAuth();
   const activeRef = useRef<HTMLButtonElement>(null);
+  const isAdmin = accountRole === 'admin' || accountRole === 'owner';
 
-  // When horizontal (mobile), keep the active chip in view. On desktop
-  // the rail is a static column, so skip.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (window.matchMedia(`(min-width: ${RAIL_DESKTOP_MIN_PX}px)`).matches) return;
@@ -54,14 +45,17 @@ export function SettingsRail({
       )}
     >
       {RAIL_GROUPS.map(({ label, group }) => {
-        const items = SETTINGS_SECTIONS.filter(
-          (s) => SECTION_META[s].group === group,
-        );
+        const items = SETTINGS_SECTIONS.filter((s) => {
+          const meta = SECTION_META[s];
+          if (meta.group !== group) return false;
+          if (meta.adminOnly && !isAdmin) return false;
+          return true;
+        });
+
+        if (items.length === 0) return null;
+
         return (
-          <div
-            key={group}
-            className="flex shrink-0 gap-1 lg:flex-col lg:gap-0.5"
-          >
+          <div key={group} className="flex shrink-0 gap-1 lg:flex-col lg:gap-0.5">
             {label ? (
               <div className="hidden px-3 pt-3.5 pb-1.5 text-[11px] font-semibold tracking-[0.09em] text-muted-foreground uppercase lg:block">
                 {label}

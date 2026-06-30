@@ -633,8 +633,8 @@ export function MessageThread({
 
         if (!res.ok) {
           const reason = payload?.error || `HTTP ${res.status}`;
-          console.error("Failed to send template:", reason);
-          toast.error(`Falha ao enviar modelo: ${reason}`);
+          console.error("[template-send] ERRO COMPLETO:", { reason, payload, status: res.status });
+          toast.error(`Falha ao enviar modelo: ${reason}`, { duration: 12000 });
           onUpdateMessage(tempId, { status: "failed" });
           return;
         }

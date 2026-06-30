@@ -546,3 +546,31 @@ export interface AutomationLog {
   created_at: string;
   contact?: Contact;
 }
+
+// ---------------------------------------------------------------------------
+// AI Agents
+// ---------------------------------------------------------------------------
+
+export interface AiAgent {
+  id: string;
+  account_id: string;
+  name: string;
+  role: string | null;
+  system_prompt: string;
+  provider: 'anthropic' | 'openai';
+  model: string;
+  temperature: number;
+  is_active: boolean;
+  tools_enabled: string[];
+  created_at: string;
+}
+
+export interface AiAgentSession {
+  id: string;
+  account_id: string;
+  conversation_id: string;
+  agent_id: string;
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  created_at: string;
+  updated_at: string;
+}

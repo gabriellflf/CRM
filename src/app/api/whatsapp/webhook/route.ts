@@ -7,6 +7,7 @@ import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
+import { dispatchToAiAgent } from '@/lib/ai/agent-runner'
 import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
@@ -72,6 +73,12 @@ interface WhatsAppWebhookEntry {
         status: string
         timestamp: string
         recipient_id: string
+        errors?: Array<{
+          code: number
+          title: string
+          message?: string
+          error_data?: { details?: string }
+        }>
       }>
     }
     field: string
@@ -329,9 +336,36 @@ async function handleStatusUpdate(status: {
   status: string
   timestamp: string
   recipient_id: string
+  errors?: Array<{ code: number; title: string; message?: string; error_data?: { details?: string } }>
 }) {
-  // 1) Mirror onto messages (legacy behavior) — Meta's status values
-  //    already match the CHECK constraint on messages.status.
+  console.log('[webhook] status update recebido:', {
+    message_id: status.id,
+    status: status.status,
+    recipient: status.recipient_id,
+    errors: status.errors ?? null,
+  })
+
+  if (status.status === 'failed') {
+    console.error('[webhook] Meta template delivery FAILED:', {
+      message_id: status.id,
+      recipient: status.recipient_id,
+      errors: status.errors,
+    })
+  }
+
+  // 1) Mirror onto messages — apply only forward-moving transitions
+  //    so a late `failed` webhook can't override an already-delivered
+  //    or read message, and `sent` doesn't clobber `delivered`.
+  const { data: existing } = await supabaseAdmin()
+    .from('messages')
+    .select('status')
+    .eq('message_id', status.id)
+    .maybeSingle()
+
+  if (existing?.status && !isValidStatusTransition(existing.status, status.status)) {
+    return
+  }
+
   const { error: msgErr } = await supabaseAdmin()
     .from('messages')
     .update({ status: status.status })
@@ -676,6 +710,28 @@ async function processMessage(
     isFirstInboundMessage,
   })
   const flowConsumed = flowResult.consumed
+
+  // ============================================================
+  // AI Agent dispatch.
+  //
+  // Runs only when the flow did NOT consume the message.
+  // If the conversation has an active AI agent assigned, the agent
+  // handles the reply and we skip automations for this inbound
+  // (same suppression logic as flows).
+  // ============================================================
+  if (!flowConsumed) {
+    const aiHandled = await dispatchToAiAgent({
+      conversationId: conversation.id,
+      contactId: contactRecord.id,
+      accountId,
+      messageText: contentText ?? message.text?.body ?? '',
+      configUserId: configOwnerUserId,
+    }).catch((err) => {
+      console.error('[ai-agent] dispatch error:', err)
+      return false
+    })
+    if (aiHandled) return
+  }
 
   // Fire any automations that react to this webhook event. All dispatches
   // run here (not earlier) so the contact, conversation, and inbound

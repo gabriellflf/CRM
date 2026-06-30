@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useAuth } from '@/hooks/use-auth';
@@ -15,22 +15,31 @@ import { TemplateManager } from '@/components/settings/template-manager';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { MembersTab } from '@/components/settings/members-tab';
+import { AiKeysPanel } from '@/components/settings/ai-keys-panel';
 import {
   resolveSection,
+  SECTION_META,
   type SettingsSection,
 } from '@/components/settings/settings-sections';
 
 export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { defaultCurrency } = useAuth();
+  const { defaultCurrency, accountRole, profileLoading } = useAuth();
   const { mode } = useTheme();
 
-  // The URL (`?tab=`) is the single source of truth for the active
-  // section — deep-linkable, and it keeps the existing links in the
-  // app sidebar/header working. Legacy tab values (tags, custom-fields)
-  // resolve onto their new home; unknown/empty → the Overview landing.
+  const isAdmin = accountRole === 'admin' || accountRole === 'owner';
+
   const section = resolveSection(searchParams.get('tab'));
+
+  // Guard: if a non-admin lands on an admin-only section via direct URL,
+  // redirect silently to their profile.
+  useEffect(() => {
+    if (profileLoading) return;
+    if (!isAdmin && SECTION_META[section]?.adminOnly) {
+      router.replace('/settings?tab=profile');
+    }
+  }, [isAdmin, profileLoading, section, router]);
 
   const go = (next: SettingsSection) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -38,9 +47,6 @@ export default function SettingsPage() {
     router.replace(`/settings?${params.toString()}`, { scroll: false });
   };
 
-  // Cheap, fetch-free rail hints. The Overview landing carries the
-  // full live status/counts; the rail just surfaces the two that are
-  // already in context.
   const hints: Partial<Record<SettingsSection, ReactNode>> = useMemo(
     () => ({
       appearance: mode.charAt(0).toUpperCase() + mode.slice(1),
@@ -50,15 +56,16 @@ export default function SettingsPage() {
   );
 
   const panel: Record<SettingsSection, ReactNode> = {
-    overview: <SettingsOverview onSelect={go} />,
-    profile: <ProfileForm />,
-    security: <SecurityPanel />,
+    overview:   <SettingsOverview onSelect={go} />,
+    profile:    <ProfileForm />,
+    security:   <SecurityPanel />,
     appearance: <AppearancePanel />,
-    whatsapp: <WhatsAppConfig />,
-    templates: <TemplateManager />,
-    fields: <FieldsAndTagsPanel />,
-    deals: <DealsSettings />,
-    members: <MembersTab />,
+    whatsapp:   <WhatsAppConfig />,
+    templates:  <TemplateManager />,
+    fields:      <FieldsAndTagsPanel />,
+    deals:       <DealsSettings />,
+    members:     <MembersTab />,
+    'ai-agents': <AiKeysPanel />,
   };
 
   return (

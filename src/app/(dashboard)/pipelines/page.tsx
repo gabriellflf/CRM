@@ -48,7 +48,8 @@ export default function PipelinesPage() {
   const supabase = createClient();
   const canEditSettings = useCan("edit-settings");
   const canCreateDeals = useCan("send-messages");
-  const { accountId } = useAuth();
+  const { accountId, user, profile, accountRole, profileLoading } = useAuth();
+  const isAdmin = accountRole === 'admin' || accountRole === 'owner';
 
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
@@ -102,9 +103,18 @@ export default function PipelinesPage() {
         .select("*, contact:contacts(*), assignee:profiles!deals_assigned_to_fkey(*)")
         .eq("pipeline_id", pipelineId)
         .order("created_at", { ascending: false });
-      return (data ?? []) as Deal[];
+
+      const all = (data ?? []) as Deal[];
+
+      // Only filter after profile has loaded so we have the correct profiles.id.
+      // user.id is the auth UUID which differs from profiles.id stored in assigned_to.
+      if (!profileLoading && !isAdmin && profile?.id) {
+        return all.filter((d) => !d.assigned_to || d.assigned_to === profile.id);
+      }
+
+      return all;
     },
-    [supabase],
+    [supabase, isAdmin, profileLoading, profile?.id],
   );
 
   const seedDefaultPipeline = useCallback(async (): Promise<Pipeline | null> => {

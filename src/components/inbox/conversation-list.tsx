@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus } from "@/types";
-import { Search, ChevronDown, Users } from "lucide-react";
+import { Search, ChevronDown, Tag, Users } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Input } from "@/components/ui/input";
 import {
@@ -41,6 +41,12 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
   closed: "bg-muted-foreground",
 };
 
+const STATUS_BORDER: Record<ConversationStatus, string> = {
+  open: "border-emerald-500",
+  pending: "border-amber-500",
+  closed: "border-muted-foreground/40",
+};
+
 type InboxFilter = ConversationStatus | "all" | "unread";
 
 const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = [
@@ -62,7 +68,9 @@ export function ConversationList({
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [operatorFilter, setOperatorFilter] = useState<string>("all");
   const [operators, setOperators] = useState<Operator[]>([]);
+  const [allTags, setAllTags] = useState<{ id: string; name: string; color: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
 
   // Keep the latest callback in a ref so the fetch effect below can
   // have a stable, empty-dep identity. Previously the fetch useCallback
@@ -137,6 +145,17 @@ export function ConversationList({
     })();
   }, []);
 
+  useEffect(() => {
+    const supabase = createClient();
+    (async () => {
+      const { data } = await supabase
+        .from("tags")
+        .select("id, name, color")
+        .order("name");
+      setAllTags(data ?? []);
+    })();
+  }, []);
+
   const filtered = useMemo(() => {
     let result = conversations;
 
@@ -150,6 +169,16 @@ export function ConversationList({
       result = result.filter((c) => c.assigned_agent_id === operatorFilter);
     }
 
+    if (tagFilter) {
+      result = result.filter((c) => {
+        const contactTags = (c.contact as any)?.contact_tags ?? [];
+        return contactTags.some((ct: any) => {
+          const tag = Array.isArray(ct.tags) ? ct.tags[0] : ct.tags;
+          return tag?.id === tagFilter;
+        });
+      });
+    }
+
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter((c) => {
@@ -161,7 +190,7 @@ export function ConversationList({
     }
 
     return result;
-  }, [conversations, filter, operatorFilter, search]);
+  }, [conversations, filter, operatorFilter, tagFilter, search]);
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -244,6 +273,42 @@ export function ConversationList({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {allTags.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger className={cn(
+                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                tagFilter !== null ? "text-primary" : "text-muted-foreground hover:text-foreground"
+              )}>
+                <Tag className="h-3 w-3" />
+                {tagFilter === null
+                  ? "Categoria"
+                  : allTags.find(t => t.id === tagFilter)?.name ?? "Categoria"}
+                <ChevronDown className="h-3 w-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="border-border bg-popover">
+                <DropdownMenuItem
+                  onClick={() => setTagFilter(null)}
+                  className={cn("text-sm", tagFilter === null ? "text-primary" : "text-popover-foreground")}
+                >
+                  Todas as categorias
+                </DropdownMenuItem>
+                {allTags.map((tag) => (
+                  <DropdownMenuItem
+                    key={tag.id}
+                    onClick={() => setTagFilter(tag.id)}
+                    className={cn("text-sm", tagFilter === tag.id ? "text-primary" : "text-popover-foreground")}
+                  >
+                    <span
+                      className="inline-block h-2 w-2 rounded-full shrink-0"
+                      style={{ backgroundColor: tag.color }}
+                    />
+                    {tag.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
@@ -293,8 +358,6 @@ function ConversationItem({
   const contact = conversation.contact;
   const displayName = contact?.name || contact?.phone || "Desconhecido";
   const initials = displayName.charAt(0).toUpperCase();
-  const rawContactTags = (contact as unknown as { contact_tags?: { tags: { id: string; name: string; color: string } }[] })?.contact_tags ?? [];
-  const tags = rawContactTags.map((ct) => ct.tags).filter(Boolean);
 
   const handleClick = useCallback(() => {
     onSelect(conversation);
@@ -315,7 +378,10 @@ function ConversationItem({
       )}
     >
       {/* Avatar */}
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-semibold text-foreground">
+      <div className={cn(
+        "flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-semibold text-foreground border-2",
+        STATUS_BORDER[conversation.status as ConversationStatus] ?? "border-muted-foreground/40",
+      )}>
         {contact?.avatar_url ? (
           <img
             src={contact.avatar_url}
@@ -329,41 +395,16 @@ function ConversationItem({
 
       {/* Content */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           <span className="truncate text-base font-semibold text-foreground">
             {displayName}
           </span>
-          <div className="flex shrink-0 flex-wrap justify-end gap-1">
-            {tags.length > 0 ? tags.map((tag) => (
-              <span
-                key={tag.id}
-                className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
-                style={{ backgroundColor: `${tag.color}20`, color: tag.color, border: `1px solid ${tag.color}40` }}
-              >
-                {tag.name}
-              </span>
-            )) : (
-              <span className="text-xs text-muted-foreground">{timeAgo}</span>
-            )}
-          </div>
-        </div>
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <p className="truncate text-sm text-muted-foreground">
-            {conversation.last_message_text || "Sem mensagens ainda"}
-          </p>
           <div className="flex shrink-0 items-center gap-2">
-            {tags.length > 0 && (
-              <span className="text-xs text-muted-foreground">{timeAgo}</span>
-            )}
-            {conversation.unread_count > 0 ? (
+            <span className="text-xs text-muted-foreground">{timeAgo}</span>
+            {conversation.unread_count > 0 && (
               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-bold text-primary-foreground">
                 {conversation.unread_count}
               </span>
-            ) : (
-              <span
-                className={cn("h-2.5 w-2.5 rounded-full", STATUS_COLORS[conversation.status])}
-                title={conversation.status}
-              />
             )}
           </div>
         </div>

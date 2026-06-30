@@ -2,11 +2,21 @@ import { ArrowDown, ArrowUp, Minus } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { cn } from '@/lib/utils'
 
+type IconColor = 'blue' | 'violet' | 'emerald' | 'orange'
+
+const ICON_STYLES: Record<IconColor, string> = {
+  blue:    'bg-blue-500/15 text-blue-400',
+  violet:  'bg-violet-500/15 text-violet-400',
+  emerald: 'bg-emerald-500/15 text-emerald-400',
+  orange:  'bg-orange-500/15 text-orange-400',
+}
+
 interface MetricCardProps {
   title: string
   /** Pre-formatted value for display (e.g. "42" or "$1,250"). */
   value: string
   icon: ComponentType<{ className?: string }>
+  color?: IconColor
   delta?: {
     sign: number
     label: string
@@ -15,7 +25,7 @@ interface MetricCardProps {
   onClick?: () => void
 }
 
-export function MetricCard({ title, value, icon: Icon, delta, subtitle, onClick }: MetricCardProps) {
+export function MetricCard({ title, value, icon: Icon, color, delta, subtitle, onClick }: MetricCardProps) {
   return (
     <div
       role={onClick ? 'button' : undefined}
@@ -29,7 +39,10 @@ export function MetricCard({ title, value, icon: Icon, delta, subtitle, onClick 
     >
       <div className="flex items-start justify-between">
         <p className="text-sm font-medium text-muted-foreground">{title}</p>
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+        <div className={cn(
+          'flex h-8 w-8 items-center justify-center rounded-lg',
+          color ? ICON_STYLES[color] : 'bg-muted text-muted-foreground',
+        )}>
           <Icon className="h-4 w-4" />
         </div>
       </div>

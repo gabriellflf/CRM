@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { formatCurrency } from '@/lib/currency'
@@ -51,7 +52,17 @@ type RangeDays = 7 | 30 | 90
 interface Operator { user_id: string; full_name: string }
 
 export default function DashboardPage() {
-  const { defaultCurrency } = useAuth()
+  const { defaultCurrency, accountRole, profileLoading } = useAuth()
+  const router = useRouter()
+
+  // Only admin and owner can view the dashboard.
+  // Any other role (agent, viewer, or null after load) goes to inbox.
+  useEffect(() => {
+    if (profileLoading) return
+    if (accountRole !== 'admin' && accountRole !== 'owner') {
+      router.replace('/inbox')
+    }
+  }, [accountRole, profileLoading, router])
 
   const [operators, setOperators] = useState<Operator[]>([])
   const [operatorId, setOperatorId] = useState<string>('')
@@ -214,6 +225,7 @@ export default function DashboardPage() {
               title="Conversas Ativas"
               value={metrics.activeConversations.current.toLocaleString()}
               icon={MessageSquare}
+              color="blue"
               delta={{
                 sign: metrics.activeConversations.previous,
                 label: deltaLabel(metrics.activeConversations.previous, 'novas hoje vs ontem', 'Sem novas conversas em relação a ontem'),
@@ -224,6 +236,7 @@ export default function DashboardPage() {
               title="Novos Contatos Hoje"
               value={metrics.newContactsToday.current.toLocaleString()}
               icon={UserPlus}
+              color="violet"
               delta={{
                 sign:
                   metrics.newContactsToday.current - metrics.newContactsToday.previous,
@@ -239,6 +252,7 @@ export default function DashboardPage() {
               title="Valor de Negócios Abertos"
               value={formatCurrency(metrics.openDealsValue, defaultCurrency)}
               icon={DollarSign}
+              color="emerald"
               delta={{
                 sign: metrics.openDealsValueDelta,
                 label: deltaLabel(
@@ -253,6 +267,7 @@ export default function DashboardPage() {
               title="Mensagens Enviadas Hoje"
               value={metrics.messagesSentToday.current.toLocaleString()}
               icon={Send}
+              color="orange"
               delta={{
                 sign:
                   metrics.messagesSentToday.current - metrics.messagesSentToday.previous,

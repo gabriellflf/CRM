@@ -53,7 +53,8 @@ export function DealForm({
   onSaved,
 }: DealFormProps) {
   const supabase = createClient();
-  const { accountId, defaultCurrency } = useAuth();
+  const { accountId, defaultCurrency, user, accountRole } = useAuth();
+  const isAdmin = accountRole === 'admin' || accountRole === 'owner';
 
   const [title, setTitle] = useState("");
   const [value, setValue] = useState("");
@@ -182,8 +183,8 @@ export function DealForm({
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      const user = session?.user;
-      if (!user) {
+      const sessionUser = session?.user;
+      if (!sessionUser) {
         toast.error("Não está autenticado");
         setSaving(false);
         return;
@@ -195,7 +196,7 @@ export function DealForm({
       }
       const { error } = await supabase
         .from("deals")
-        .insert({ ...payload, user_id: user.id, account_id: accountId, status: "open" });
+        .insert({ ...payload, user_id: sessionUser.id, account_id: accountId, status: "open" });
       if (error) {
         toast.error("Falha ao criar negócio");
         setSaving(false);
@@ -247,9 +248,9 @@ export function DealForm({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="bg-popover border-border text-popover-foreground sm:max-w-lg w-full p-0"
+        className="bg-popover border-border text-popover-foreground w-full max-w-full sm:max-w-lg p-0 overflow-x-hidden"
       >
-        <div className="flex h-full flex-col">
+        <div className="flex h-full flex-col overflow-x-hidden">
           <SheetHeader className="border-b border-border/50 p-4">
             <SheetTitle className="text-popover-foreground">
               {deal ? "Editar Negócio" : "Novo Negócio"}
@@ -293,7 +294,7 @@ export function DealForm({
               )}
             </div>
 
-            <div className="grid grid-cols-[1fr_110px] gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
                 <Label className="text-muted-foreground">Valor</Label>
                 <div className="relative">
@@ -379,19 +380,19 @@ export function DealForm({
                 <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Situação
                 </p>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <Button
                     type="button"
                     onClick={() => handleStatusChange("won")}
                     disabled={!!statusAction || deal.status === "won"}
-                    className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    className="w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                   >
                     {statusAction === "won" ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <>
                         <Check className="mr-1 h-4 w-4" />
-                        Marcar como Ganho
+                        Ganho
                       </>
                     )}
                   </Button>
@@ -399,14 +400,14 @@ export function DealForm({
                     type="button"
                     onClick={() => handleStatusChange("lost")}
                     disabled={!!statusAction || deal.status === "lost"}
-                    className="flex-1 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                    className="w-full bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
                   >
                     {statusAction === "lost" ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <>
                         <X className="mr-1 h-4 w-4" />
-                        Marcar como Perdido
+                        Perdido
                       </>
                     )}
                   </Button>

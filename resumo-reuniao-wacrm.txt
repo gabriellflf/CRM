@@ -1,0 +1,147 @@
+WACRM — Mário Jorge Advocacia
+Resumo para Reunião
+Data: 26/06/2026
+===============================================================
+
+
+O QUE É O SISTEMA
+-----------------
+
+CRM de WhatsApp integrado com a API oficial do Meta. Centraliza todo
+atendimento do escritório em um único painel — conversas, contatos,
+negócios e automações.
+
+
+MÓDULOS FUNCIONANDO
+-------------------
+
+Caixa de Entrada
+  Todas as conversas do WhatsApp em tempo real. Múltiplos operadores
+  podem atender simultaneamente, cada um vendo só suas conversas
+  atribuídas. Suporta imagens, documentos, áudios e templates.
+
+Contatos
+  Cadastro completo com nome, telefone, CPF, e-mail, empresa, tags e
+  descrição. Importação em massa via planilha.
+
+Pipelines
+  Kanban de casos/negócios com etapas personalizadas. Cada negócio
+  vinculado a um contato e operador.
+
+Disparos
+  Envio em massa de mensagens via templates aprovados pelo Meta para
+  listas de contatos.
+
+Automações
+  Regras automáticas — ex: quando chega nova mensagem, atribuir a um
+  operador e enviar resposta automática.
+
+Fluxos (Chatbot)
+  Menu de atendimento automático via WhatsApp. Identifica se o cliente
+  é novo ou recorrente e direciona para o agente certo com nota interna
+  contextual.
+
+
+MELHORIAS IMPLEMENTADAS RECENTEMENTE
+--------------------------------------
+
+Dashboard — Métricas
+  - Cards clicáveis: cada número abre modal com lista detalhada dos
+    dados por trás
+  - Filtro por operador no topo — ver desempenho individual de cada
+    atendente
+  - Comparativo "vs ontem" em todos os 4 cards, incluindo valor de
+    negócios abertos
+  - Mensagens enviadas pelo chatbot agora contabilizadas junto com as
+    dos agentes humanos
+  - Gráficos de conversas e pipeline agora ocupam o mesmo espaço na tela
+
+Dashboard — Gráficos de Tempo de Resposta
+  - Dois gráficos lado a lado com métricas distintas: tempo até a
+    primeira resposta e tempo médio durante a conversa
+  - Linha de referência vermelha tracejada marcando a meta de 5 minutos
+  - Barras ficam vermelhas quando ultrapassam a meta
+  - Dias sem atendimento mostram "0m" ao invés de valores incorretos
+  - Tooltip mostra "Sem interações" quando não houve atendimento no dia
+
+Dashboard — Pipeline
+  - Gráfico de rosca clicável: clicar em uma etapa abre modal com todos
+    os negócios daquela etapa
+  - Modal mostra nome do contato, telefone, empresa, valor e data
+    prevista de fechamento
+
+Caixa de Entrada — Sidebar
+  - Botão de recolher o menu lateral no desktop para ganhar espaço
+  - Botão hambúrguer no mobile para abrir o menu em telas pequenas
+  - Ícones com tooltip ao recolher — nome do item aparece ao passar o
+    mouse
+
+Fluxos — Chatbot
+  - Nota interna configurada no nó de transferência agora aparece
+    visualmente na conversa do inbox quando o cliente escolhe uma opção,
+    orientando o agente antes de assumir o atendimento
+  - Validação de formato nos campos de coleta de resposta: se o fluxo
+    pede e-mail e o cliente digita texto inválido, o sistema pede
+    novamente automaticamente
+  - Histórico de execuções completamente reformulado: mostra nome e
+    telefone do cliente, duração real do atendimento, caminho percorrido
+    em português ("Cliente respondeu", "Transferido para agente", etc.)
+
+Contatos
+  - Novos campos obrigatórios no cadastro: CPF e Tags
+  - Novo campo opcional: Descrição do contato
+  - Modal de importação atualizado refletindo os novos campos
+  - Migração de banco de dados aplicada para suportar os novos campos
+
+
+CORREÇÕES DE BUGS
+-----------------
+
+  - Gráfico de tempo de resposta mostrava "1s" para dias sem
+    atendimento — corrigido para "0m"
+
+  - Os dois gráficos de resposta mostravam os mesmos dados — corrigido
+    para cada um calcular sua métrica corretamente
+
+  - Dia da semana sumia do gráfico quando só tinha mensagens no meio
+    de conversas — corrigido
+
+  - Nota do fluxo aparecia antes do cliente clicar no botão —
+    identificado como resíduo de testes, não bug de produção;
+    instruções de limpeza fornecidas
+
+  - Cards do dashboard ficavam em estado de carregamento infinito
+    após adicionar filtro de operador — corrigido
+
+  - Filtro por operador na caixa de entrada não atualizava a lista
+    imediatamente ao trocar — necessitava clicar em uma conversa para
+    atualizar. Corrigido.
+
+  - Mensagens enviadas pelo chatbot não eram contabilizadas no card de
+    "Mensagens Enviadas Hoje" — corrigido
+
+  - Filtro de operador não aparecia quando havia apenas um operador
+    cadastrado — corrigido
+
+
+MIGRAÇÕES DE BANCO DE DADOS REALIZADAS
+---------------------------------------
+
+  - Migração 027: adição dos campos CPF e Descrição na tabela de
+    contatos
+
+  - Migração 028: adição do campo is_note na tabela de mensagens,
+    necessário para diferenciar notas internas das mensagens normais
+    na caixa de entrada
+
+
+PRÓXIMOS PASSOS SUGERIDOS
+--------------------------
+
+  1. Taxa de resolução de conversas no dashboard
+  2. Alerta de SLA — conversas sem resposta há mais de X horas
+  3. Seletor de período nos cards (hoje / esta semana / este mês)
+  4. Horário de pico de atendimento no dashboard
+  5. Nomes completos no feed de atividade recente
+
+===============================================================

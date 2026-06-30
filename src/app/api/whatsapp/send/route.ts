@@ -251,15 +251,23 @@ export async function POST(request: Request) {
     // guards against a malformed row (e.g. from a partial sync)
     // crashing the send-builder later in the stack.
     let templateRow: MessageTemplate | null = null
+    // sendLanguage is what we actually pass to Meta — authoritative order:
+    //   1. language stored on the template DB row (most reliable)
+    //   2. language passed by the client
+    //   3. fallback 'en_US'
+    let sendLanguage = template_language || 'en_US'
+
     if (message_type === 'template' && template_name) {
-      const { data } = await supabase
+      // Try exact match first (name + language from client)
+      const { data: exact } = await supabase
         .from('message_templates')
         .select('*')
         .eq('account_id', accountId)
         .eq('name', template_name)
-        .eq('language', template_language || 'en_US')
+        .eq('language', sendLanguage)
         .maybeSingle()
-      if (data && !isMessageTemplate(data)) {
+
+      if (exact && !isMessageTemplate(exact)) {
         return NextResponse.json(
           {
             error:
@@ -268,7 +276,40 @@ export async function POST(request: Request) {
           { status: 500 },
         )
       }
-      templateRow = data ?? null
+
+      templateRow = exact ?? null
+
+      // Fallback: find by name alone (handles language drift after sync)
+      if (!templateRow) {
+        const { data: byName } = await supabase
+          .from('message_templates')
+          .select('*')
+          .eq('account_id', accountId)
+          .eq('name', template_name)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (byName && isMessageTemplate(byName)) {
+          templateRow = byName
+        }
+      }
+
+      // Use the language stored in the DB row — that's what Meta approved
+      if (templateRow?.language) {
+        sendLanguage = templateRow.language
+      }
+
+      console.log('[whatsapp/send] template send debug:', {
+        template_name,
+        sendLanguage,
+        templateRowFound: !!templateRow,
+        templateStatus: templateRow?.status,
+        templateHeaderType: templateRow?.header_type,
+        templateBodyText: templateRow?.body_text?.slice(0, 80),
+        phone: sanitizedPhone,
+        accountId,
+      })
     }
 
     const attempt = async (phone: string): Promise<string> => {
@@ -278,7 +319,7 @@ export async function POST(request: Request) {
           accessToken,
           to: phone,
           templateName: template_name,
-          language: template_language || 'en_US',
+          language: sendLanguage,
           template: templateRow ?? undefined,
           messageParams: template_message_params ?? undefined,
           // Legacy body-only fallback — only consulted when

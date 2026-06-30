@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import {
+  Bot,
   ChevronLeft,
   ChevronRight,
   Crown,
@@ -31,10 +32,6 @@ import {
 } from "lucide-react";
 import type { AccountRole } from "@/lib/auth/roles";
 
-// Per-role chip metadata used in the sidebar's account strip + the
-// Members tab roster. Keeping this near both consumers in a single
-// place avoids drift between the two surfaces — when a designer
-// wants to recolour "agent" rows, this is the one diff.
 const ROLE_CHIP: Record<
   AccountRole,
   { icon: typeof Crown; label: string; className: string }
@@ -42,28 +39,25 @@ const ROLE_CHIP: Record<
   owner: {
     icon: Crown,
     label: "Proprietário",
-    className:
-      "border-amber-500/40 bg-amber-500/10 text-amber-300",
+    className: "border-amber-500/40 bg-amber-500/10 text-amber-300",
   },
   admin: {
     icon: Shield,
     label: "Admin",
-    className:
-      "border-primary/40 bg-primary/10 text-primary",
+    className: "border-primary/40 bg-primary/10 text-primary",
   },
   agent: {
     icon: UserCog,
     label: "Agente",
-    className:
-      "border-border bg-muted text-foreground",
+    className: "border-border bg-muted text-foreground",
   },
   viewer: {
     icon: User,
     label: "Visualizador",
-    className:
-      "border-border bg-card text-muted-foreground",
+    className: "border-border bg-card text-muted-foreground",
   },
 };
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,32 +70,35 @@ interface NavItem {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
-  /**
-   * When true, the nav row renders a small "Beta" chip after the label.
-   * Purely informational — doesn't affect routing or access.
-   */
   beta?: boolean;
+  /** When true, only admin and owner see this item. Agents and viewers don't. */
+  adminOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { href: "/dashboard", label: "Painel", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Painel", icon: LayoutDashboard, adminOnly: true },
   { href: "/inbox", label: "Caixa de Entrada", icon: MessageSquare },
+  { href: "/meus-clientes", label: "Meus Clientes", icon: UserCog },
   { href: "/contacts", label: "Contatos", icon: Users },
   { href: "/pipelines", label: "Pipelines", icon: GitBranch },
+  { href: "/equipe", label: "Equipe", icon: UsersRound, adminOnly: true },
+  { href: "/agents", label: "Agentes IA", icon: Bot, adminOnly: true },
   { href: "/broadcasts", label: "Disparos", icon: Radio },
   { href: "/automations", label: "Automações", icon: Zap },
   { href: "/flows", label: "Fluxos", icon: Workflow, beta: true },
 ];
 
-const bottomNavItems = [
+const bottomNavItems: NavItem[] = [
   { href: "/settings", label: "Configurações", icon: Settings },
 ];
 
+function isAdmin(role: AccountRole | null) {
+  return role === "admin" || role === "owner";
+}
+
 interface SidebarProps {
-  /** Controlled on mobile by the Header's hamburger button. Ignored on lg+. */
   open?: boolean;
   onClose?: () => void;
-  /** Desktop-only: collapses the sidebar to icon-only mode. */
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -111,29 +108,17 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const { mode, toggleMode } = useTheme();
   const totalUnread = useTotalUnread();
-  // Only surface the account-name strip when it actually carries
-  // information. A solo user's personal account is named after them
-  // (the 017 signup trigger seeds it from `full_name`), so showing it
-  // here would just duplicate the user name in the footer below. Once
-  // the account is renamed or the user joins a shared account, the
-  // name diverges and the strip becomes meaningful — that's the signal
-  // we gate on. Wait for the profile fetch to settle first, otherwise
-  // the strip flashes in once the row resolves (a layout jump).
+
   const showAccountStrip =
     !profileLoading &&
     !!account?.name &&
     account.name !== profile?.full_name;
 
-  // Close the drawer when route changes — users opened it to navigate,
-  // so once they pick a destination the drawer should get out of the way.
   useEffect(() => {
     onClose?.();
-    // Only pathname drives this — onClose identity doesn't need to re-run it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
-  // Lock body scroll and allow Escape to close while the drawer is open on
-  // mobile. No-ops on desktop because the sidebar isn't positioned there.
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -148,11 +133,18 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
     };
   }, [open, onClose]);
 
+  // Filter nav items based on role.
+  // While profile is loading, hide admin-only items to avoid a flash
+  // where the full menu appears then shrinks once the role is known.
+  const visibleNavItems = navItems.filter(
+    (item) => !item.adminOnly || isAdmin(accountRole)
+  );
+  const visibleBottomItems = bottomNavItems.filter(
+    (item) => !item.adminOnly || isAdmin(accountRole)
+  );
+
   return (
     <>
-      {/* Backdrop — only exists on mobile and only when open. Clicking
-          it closes the drawer. Hidden from lg+ since the sidebar is
-          part of the main flex row there. */}
       <button
         type="button"
         aria-label="Fechar menu"
@@ -167,20 +159,17 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
 
       <aside
         className={cn(
-          // Mobile: fixed drawer that slides in from the left.
           "fixed inset-y-0 left-0 z-40 flex h-full w-72 flex-col border-r border-white/10 bg-[#082637]",
           "transition-transform duration-200 ease-out will-change-transform",
           open ? "translate-x-0" : "-translate-x-full",
-          // Desktop: static, always visible — reset all the mobile framing.
           "lg:static lg:z-0 lg:translate-x-0 lg:transition-all lg:duration-200",
           collapsed ? "lg:w-16" : "lg:w-72",
         )}
         aria-label="Navegação principal"
       >
-        {/* Logo row. On mobile we put a close button here; on desktop the
-            close button is hidden since the sidebar is always-visible. */}
+        {/* Logo row */}
         <div className="relative flex h-24 shrink-0 items-center justify-start border-b border-white/10 px-5">
-          <Link href="/dashboard" className={cn("flex items-center py-3", collapsed && "lg:hidden")}>
+          <Link href={isAdmin(accountRole) ? "/dashboard" : "/inbox"} className={cn("flex items-center py-3", collapsed && "lg:hidden")}>
             <Image
               src="/logomja.png"
               alt="Mario Jorge Advocacia"
@@ -216,7 +205,7 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));
@@ -230,7 +219,6 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
                     href={item.href}
                     title={collapsed ? item.label : undefined}
                     className={cn(
-                      // Taller on mobile so fingers can hit the row reliably (≥44px).
                       "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-colors lg:py-2",
                       isActive
                         ? "bg-white/15 text-white"
@@ -266,7 +254,7 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
           <div className="my-4 border-t border-white/10" />
 
           <ul className="flex flex-col gap-1">
-            {bottomNavItems.map((item) => {
+            {visibleBottomItems.map((item) => {
               const isActive = pathname.startsWith(item.href);
               return (
                 <li key={item.href}>
@@ -306,26 +294,13 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
 
         {/* User section */}
         <div className="shrink-0 border-t border-white/10 p-3">
-          {/* Account name display — surfaced only when the account
-              name differs from the user's own name (see
-              `showAccountStrip`). For a default solo account the two
-              match, so we hide it to avoid duplicating the user name
-              below; for renamed or shared accounts it tells the user
-              which account they're acting in. */}
           {showAccountStrip && account?.name && !collapsed ? (
             <div className="mb-2 flex items-center gap-2 px-3 text-xs text-white/50">
               <UsersRound className="size-3.5 shrink-0" />
-              {/* `title=` exposes the full name on hover when it
-                  gets truncated (long account names + narrow
-                  sidebars). Cheap a11y win. */}
               <span className="truncate" title={account.name}>
                 {account.name}
               </span>
               {accountRole ? (
-                // Always render the chip — owners used to be
-                // invisible here, which made them indistinguishable
-                // from admins at a glance. Now everyone sees their
-                // role (with a colour cue) regardless of tier.
                 (() => {
                   const meta = ROLE_CHIP[accountRole];
                   const Icon = meta.icon;
@@ -379,7 +354,7 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
               <DropdownMenuItem
                 render={
                   <Link
-                    href="/settings?tab=whatsapp"
+                    href={isAdmin(accountRole) ? "/settings?tab=whatsapp" : "/settings?tab=profile"}
                     onClick={onClose}
                     className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
                   />

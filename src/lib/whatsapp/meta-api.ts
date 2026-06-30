@@ -428,6 +428,8 @@ export async function sendTemplateMessage(
     body.context = { message_id: contextMessageId }
   }
 
+  console.log('[meta-api] sendTemplate payload:', JSON.stringify(templatePayload))
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {

@@ -104,10 +104,23 @@ export function TemplatePicker({
         return;
       }
 
+      // Use account_id so all team members see the same template catalog
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("account_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const accountId = profile?.account_id;
+      if (!accountId) {
+        if (!cancelled) { setTemplates([]); setLoading(false); }
+        return;
+      }
+
       const { data, error } = await supabase
         .from("message_templates")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("account_id", accountId)
         .eq("status", "APPROVED")
         .order("created_at", { ascending: false });
 

@@ -106,9 +106,9 @@ function buildHeaderComponent(
   const link = params.headerMediaUrl ?? template.header_media_url;
   const id = params.headerMediaId;
   if (!link && !id) {
-    throw new Error(
-      `${headerType} header requires a media link or id at send time — set header_media_url on the template or pass headerMediaUrl/headerMediaId.`,
-    );
+    // Template was synced from Meta without a stored media URL.
+    // Skip the header component — Meta will use the approved media from the template definition.
+    return null;
   }
   const mediaPayload: { link?: string; id?: string } = id ? { id } : { link };
   return {
