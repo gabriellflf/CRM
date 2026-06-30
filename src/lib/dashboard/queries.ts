@@ -119,7 +119,7 @@ export async function loadActiveConversationsDetail(db: DB, operatorId?: string)
     .eq('status', 'open')
   if (operatorId) q = q.eq('assigned_agent_id', operatorId)
   const { data } = await q.order('last_message_at', { ascending: false }).limit(50)
-  return (data ?? []) as ActiveConversationRow[]
+  return (data ?? []) as unknown as ActiveConversationRow[]
 }
 
 export interface NewContactRow {
@@ -157,7 +157,7 @@ export async function loadOpenDealsDetail(db: DB, operatorId?: string): Promise<
     .eq('status', 'open')
   if (operatorId) q = q.eq('assigned_to', operatorId)
   const { data } = await q.order('value', { ascending: false }).limit(50)
-  return (data ?? []) as OpenDealRow[]
+  return (data ?? []) as unknown as OpenDealRow[]
 }
 
 export interface MessageSentRow {
@@ -178,7 +178,7 @@ export async function loadMessagesSentTodayDetail(db: DB, operatorId?: string): 
     .gte('created_at', todayStart)
   if (operatorId) q = q.eq('sender_id', operatorId)
   const { data } = await q.order('created_at', { ascending: false }).limit(50)
-  return (data ?? []) as MessageSentRow[]
+  return (data ?? []) as unknown as MessageSentRow[]
 }
 
 // --- 2. Conversations over time ---------------------------------------
