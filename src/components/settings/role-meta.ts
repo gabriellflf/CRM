@@ -26,26 +26,24 @@ export const ROLE_META: Record<
     icon: Crown,
     label: 'Proprietário',
     variant: 'owner',
-    className: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
+    className: 'border-amber-500 bg-amber-500 text-white',
   },
   admin: {
     icon: Shield,
     label: 'Admin',
     variant: 'admin',
-    className: 'border-primary/40 bg-primary/10 text-primary',
+    className: 'border-primary bg-primary text-primary-foreground',
   },
   agent: {
     icon: UserCog,
-    label: 'Agente',
+    label: 'Operador',
     variant: 'muted',
-    className: 'border-border bg-muted text-muted-foreground',
+    className: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
   },
   viewer: {
     icon: UserIcon,
     label: 'Visualizador',
     variant: 'muted',
-    // Outline-only so it stays quieter than the filled Agent chip in
-    // both modes — bg-card would blend into a card surface in light mode.
-    className: 'border-border bg-transparent text-muted-foreground',
+    className: 'border-slate-400 bg-slate-400 text-white',
   },
 };

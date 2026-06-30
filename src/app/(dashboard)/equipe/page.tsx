@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
-import { MessageSquare, Send, TrendingUp, ChevronDown, Check } from 'lucide-react'
+import { MessageSquare, Send, TrendingUp, ChevronDown, Check, Trash2, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -17,6 +17,7 @@ interface OperatorRow {
   user_id: string
   full_name: string | null
   email: string | null
+  avatar_url: string | null
   account_role: string
   activeConversations: number
   messagesToday: number
@@ -29,11 +30,53 @@ export default function EquipePage() {
   const [operators, setOperators] = useState<OperatorRow[]>([])
   const [loading, setLoading] = useState(true)
   const [savingRole, setSavingRole] = useState<string | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
+
+  const canManage = accountRole === 'owner' || accountRole === 'admin'
+  const callerIsAdmin = accountRole === 'admin'
+  const isOwner = accountRole === 'owner'
+
+  // null = not yet initialized; set once profile loads
+  const [operatorFilter, setOperatorFilter] = useState<string | null>(null)
+
+  // Default: admin sees their own data; owner sees the whole team
+  useEffect(() => {
+    if (profileLoading || operatorFilter !== null) return
+    setOperatorFilter(isOwner ? '' : (user?.id ?? ''))
+  }, [profileLoading, isOwner, user?.id, operatorFilter])
+
+  async function handleRemoveMember(op: OperatorRow) {
+    const label = op.full_name ?? op.email ?? 'este membro'
+    if (!confirm(`Remover ${label} da equipe? Ele perderá o acesso ao CRM.`)) return
+    setRemovingId(op.user_id)
+    const res = await fetch(`/api/team/members/${op.user_id}`, { method: 'DELETE' })
+    setRemovingId(null)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.error ?? 'Falha ao remover membro')
+      return
+    }
+    setOperators(prev => prev.filter(o => o.user_id !== op.user_id))
+    toast.success(`${label} removido da equipe`)
+  }
 
   async function handleRoleChange(operatorUserId: string, newRole: string) {
-    if (operatorUserId === user?.id) {
-      toast.error('Você não pode alterar sua própria função')
-      return
+    // Owners can change anyone (including themselves and other owners).
+    // Admins cannot change their own role, cannot touch owners, cannot promote to owner.
+    if (accountRole !== 'owner') {
+      if (operatorUserId === user?.id) {
+        toast.error('Você não pode alterar sua própria função')
+        return
+      }
+      const target = operators.find(o => o.user_id === operatorUserId)
+      if (target?.account_role === 'owner') {
+        toast.error('A função de um proprietário não pode ser alterada')
+        return
+      }
+      if (newRole === 'owner') {
+        toast.error('Não é permitido promover alguém a Proprietário por aqui')
+        return
+      }
     }
     setSavingRole(operatorUserId)
     const db = createClient()
@@ -74,7 +117,7 @@ export default function EquipePage() {
 
       const [profilesRes, convsRes, msgsRes, responsesRes] = await Promise.all([
         db.from('profiles')
-          .select('user_id, full_name, email, account_role')
+          .select('user_id, full_name, email, avatar_url, account_role')
           .eq('account_id', accountId)
           .order('full_name'),
 
@@ -147,6 +190,7 @@ export default function EquipePage() {
         user_id: p.user_id,
         full_name: p.full_name,
         email: p.email,
+        avatar_url: p.avatar_url ?? null,
         account_role: p.account_role ?? 'agent',
         activeConversations: convByAgent[p.user_id] ?? 0,
         messagesToday: msgByAgent[p.user_id] ?? 0,
@@ -168,17 +212,42 @@ export default function EquipePage() {
     )
   }
 
-  const totalActive = operators.reduce((s, o) => s + o.activeConversations, 0)
-  const totalMsgs = operators.reduce((s, o) => s + o.messagesToday, 0)
+  const effectiveFilter = operatorFilter ?? ''
+  const displayOp = effectiveFilter ? (operators.find(o => o.user_id === effectiveFilter) ?? null) : null
+  const totalActive = displayOp ? displayOp.activeConversations : operators.reduce((s, o) => s + o.activeConversations, 0)
+  const totalMsgs = displayOp ? displayOp.messagesToday : operators.reduce((s, o) => s + o.messagesToday, 0)
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Equipe</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Desempenho dos operadores em tempo real.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Equipe</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Desempenho dos operadores em tempo real.
+          </p>
+        </div>
+        {canManage && operators.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <select
+              value={effectiveFilter}
+              onChange={(e) => setOperatorFilter(e.target.value)}
+              className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              {isOwner
+                ? <option value="">Toda a equipe</option>
+                : <option value={user?.id ?? ''}>Meus dados</option>
+              }
+              {operators
+                .filter(o => isOwner || o.user_id !== user?.id)
+                .map(o => (
+                  <option key={o.user_id} value={o.user_id}>{o.full_name ?? o.email}</option>
+                ))
+              }
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Summary cards */}
@@ -186,19 +255,19 @@ export default function EquipePage() {
         <SummaryCard
           icon={TrendingUp}
           color="blue"
-          label="Operadores ativos"
+          label="Operadores na equipe"
           value={String(operators.length)}
         />
         <SummaryCard
           icon={MessageSquare}
           color="violet"
-          label="Conversas abertas"
+          label={displayOp ? 'Conversas abertas' : 'Conversas abertas (equipe)'}
           value={String(totalActive)}
         />
         <SummaryCard
           icon={Send}
           color="emerald"
-          label="Mensagens enviadas hoje"
+          label={displayOp ? 'Mensagens enviadas hoje' : 'Mensagens enviadas hoje (equipe)'}
           value={String(totalMsgs)}
         />
       </div>
@@ -223,6 +292,7 @@ export default function EquipePage() {
               <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Função
               </th>
+              {canManage && <th className="w-10" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -230,8 +300,12 @@ export default function EquipePage() {
               <tr key={op.user_id} className="hover:bg-muted/30">
                 <td className="px-5 py-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                      {(op.full_name || op.email || 'U').charAt(0).toUpperCase()}
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary overflow-hidden">
+                      {op.avatar_url ? (
+                        <img src={op.avatar_url} alt={op.full_name ?? 'avatar'} className="h-8 w-8 rounded-full object-cover" />
+                      ) : (
+                        (op.full_name || op.email || 'U').charAt(0).toUpperCase()
+                      )}
                     </div>
                     <div>
                       <p className="font-medium text-foreground">{op.full_name ?? '—'}</p>
@@ -259,21 +333,38 @@ export default function EquipePage() {
                   )}
                 </td>
                 <td className="px-5 py-4">
-                  {op.user_id === user?.id ? (
+                  {(op.user_id === user?.id || op.account_role === 'owner') && accountRole !== 'owner' ? (
                     <RoleChip role={op.account_role} />
                   ) : (
                     <RoleSelect
                       role={op.account_role}
                       disabled={savingRole === op.user_id}
                       onChange={v => handleRoleChange(op.user_id, v)}
+                      callerIsOwner={accountRole === 'owner'}
                     />
                   )}
                 </td>
+                {canManage && (
+                  <td className="px-5 py-4 text-right">
+                    {op.user_id !== user?.id && !(callerIsAdmin && (op.account_role === 'admin' || op.account_role === 'owner')) && (
+                      <button
+                        onClick={() => handleRemoveMember(op)}
+                        disabled={removingId === op.user_id}
+                        title="Remover da equipe"
+                        className="inline-flex items-center justify-center rounded-lg border border-border p-1.5 text-muted-foreground transition-all hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                      >
+                        {removingId === op.user_id
+                          ? <span className="h-3.5 w-3.5 animate-spin rounded-full border border-t-transparent border-red-400" />
+                          : <Trash2 className="h-3.5 w-3.5" />}
+                      </button>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
             {operators.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-5 py-12 text-center text-sm text-muted-foreground">
+                <td colSpan={canManage ? 6 : 5} className="px-5 py-12 text-center text-sm text-muted-foreground">
                   Nenhum operador encontrado.
                 </td>
               </tr>
@@ -316,10 +407,10 @@ function SummaryCard({
 }
 
 const ROLE_LABELS: Record<string, { label: string; className: string }> = {
-  owner:  { label: 'Proprietário', className: 'border-amber-500/40 bg-amber-500/10 text-amber-300' },
-  admin:  { label: 'Admin',        className: 'border-primary/40 bg-primary/10 text-primary' },
-  agent:  { label: 'Agente',       className: 'border-border bg-muted text-foreground' },
-  viewer: { label: 'Visualizador', className: 'border-border bg-card text-muted-foreground' },
+  owner:  { label: 'Proprietário', className: 'border-amber-500 bg-amber-500 text-white' },
+  admin:  { label: 'Admin',        className: 'border-primary bg-primary text-primary-foreground' },
+  agent:  { label: 'Operador',      className: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' },
+  viewer: { label: 'Visualizador', className: 'border-slate-400 bg-slate-400 text-white' },
 }
 
 function RoleChip({ role }: { role: string }) {
@@ -331,19 +422,27 @@ function RoleChip({ role }: { role: string }) {
   )
 }
 
-const ROLE_OPTIONS = [
-  { value: 'owner',  label: 'Proprietário' },
+const ROLE_OPTIONS_ADMIN = [
   { value: 'admin',  label: 'Admin' },
-  { value: 'agent',  label: 'Agente' },
+  { value: 'agent',  label: 'Operador' },
   { value: 'viewer', label: 'Visualizador' },
 ]
 
-function RoleSelect({ role, disabled, onChange }: {
+const ROLE_OPTIONS_OWNER = [
+  { value: 'owner',  label: 'Proprietário' },
+  { value: 'admin',  label: 'Admin' },
+  { value: 'agent',  label: 'Operador' },
+  { value: 'viewer', label: 'Visualizador' },
+]
+
+function RoleSelect({ role, disabled, onChange, callerIsOwner }: {
   role: string
   disabled: boolean
   onChange: (v: string) => void
+  callerIsOwner?: boolean
 }) {
   const meta = ROLE_LABELS[role] ?? ROLE_LABELS.agent
+  const options = callerIsOwner ? ROLE_OPTIONS_OWNER : ROLE_OPTIONS_ADMIN
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -357,7 +456,7 @@ function RoleSelect({ role, disabled, onChange }: {
         <ChevronDown className="h-3 w-3 opacity-70" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-36 border-border bg-popover">
-        {ROLE_OPTIONS.map(o => (
+        {options.map(o => (
           <DropdownMenuItem
             key={o.value}
             onClick={() => onChange(o.value)}

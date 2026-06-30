@@ -96,7 +96,7 @@ interface Invitation {
 // promotions go through the (deferred) Transfer Ownership flow.
 const EDITABLE_ROLES: { value: AccountRole; label: string; hint: string }[] = [
   { value: 'admin', label: 'Admin', hint: 'Gerenciar membros + tudo mais' },
-  { value: 'agent', label: 'Agente', hint: 'Usar funcionalidades; sem configurações' },
+  { value: 'agent', label: 'Operador', hint: 'Usar funcionalidades; sem configurações' },
   { value: 'viewer', label: 'Visualizador', hint: 'Somente leitura no app' },
 ];
 

@@ -515,7 +515,7 @@ export default function ContactsPage() {
             <GatedButton
               variant="destructive"
               size="sm"
-              canAct={canEdit}
+              canAct={canEditSettings}
               gateReason="excluir contatos"
               onClick={() => setBulkDeleteOpen(true)}
             >
@@ -531,15 +531,17 @@ export default function ContactsPage() {
         <Table>
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
-              <TableHead className="w-10">
-                <Checkbox
-                  checked={allOnPageSelected}
-                  indeterminate={!allOnPageSelected && someOnPageSelected}
-                  onCheckedChange={toggleSelectAll}
-                  disabled={contacts.length === 0}
-                  aria-label="Selecionar todos os contatos desta página"
-                />
-              </TableHead>
+              {canEditSettings && (
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={allOnPageSelected}
+                    indeterminate={!allOnPageSelected && someOnPageSelected}
+                    onCheckedChange={toggleSelectAll}
+                    disabled={contacts.length === 0}
+                    aria-label="Selecionar todos os contatos desta página"
+                  />
+                </TableHead>
+              )}
               <TableHead className="text-muted-foreground">Nome</TableHead>
               <TableHead className="text-muted-foreground">Telefone</TableHead>
               <TableHead className="text-muted-foreground hidden md:table-cell">E-mail</TableHead>
@@ -590,13 +592,15 @@ export default function ContactsPage() {
                   className="border-border hover:bg-muted/50 cursor-pointer"
                   onClick={() => openDetail(contact.id)}
                 >
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={selected.has(contact.id)}
-                      onCheckedChange={() => toggleSelect(contact.id)}
-                      aria-label={`Selecionar ${contact.name || contact.phone}`}
-                    />
-                  </TableCell>
+                  {canEditSettings && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selected.has(contact.id)}
+                        onCheckedChange={() => toggleSelect(contact.id)}
+                        aria-label={`Selecionar ${contact.name || contact.phone}`}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell className="text-foreground font-medium">
                     {contact.name || <span className="text-muted-foreground italic">Sem nome</span>}
                   </TableCell>
@@ -651,14 +655,16 @@ export default function ContactsPage() {
                       >
                         <Pencil className="size-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={(e) => { e.stopPropagation(); confirmDelete(contact); }}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
+                      {canEditSettings && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={(e) => { e.stopPropagation(); confirmDelete(contact); }}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

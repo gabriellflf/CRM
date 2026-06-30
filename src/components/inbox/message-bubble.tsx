@@ -252,7 +252,7 @@ export function MessageBubble({
   if (message.is_note) {
     return (
       <div className="flex justify-center px-4 py-1">
-        <div className="flex max-w-sm items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+        <div className="flex max-w-sm items-start gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
           <StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span className="whitespace-pre-wrap break-words">{message.content_text}</span>
         </div>

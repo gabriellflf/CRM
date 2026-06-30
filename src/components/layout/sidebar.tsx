@@ -39,22 +39,22 @@ const ROLE_CHIP: Record<
   owner: {
     icon: Crown,
     label: "Proprietário",
-    className: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+    className: "border-amber-500 bg-amber-500 text-white",
   },
   admin: {
     icon: Shield,
     label: "Admin",
-    className: "border-primary/40 bg-primary/10 text-primary",
+    className: "border-primary bg-primary text-primary-foreground",
   },
   agent: {
     icon: UserCog,
-    label: "Agente",
-    className: "border-border bg-muted text-foreground",
+    label: "Operador",
+    className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
   },
   viewer: {
     icon: User,
     label: "Visualizador",
-    className: "border-border bg-card text-muted-foreground",
+    className: "border-slate-400 bg-slate-400 text-white",
   },
 };
 
@@ -71,21 +71,22 @@ interface NavItem {
   label: string;
   icon: typeof LayoutDashboard;
   beta?: boolean;
-  /** When true, only admin and owner see this item. Agents and viewers don't. */
+  /** Only admin and owner see this item. */
   adminOnly?: boolean;
+  /** Only owner sees this item. */
+  ownerOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { href: "/dashboard", label: "Painel", icon: LayoutDashboard, adminOnly: true },
-  { href: "/inbox", label: "Caixa de Entrada", icon: MessageSquare },
-  { href: "/meus-clientes", label: "Meus Clientes", icon: UserCog },
-  { href: "/contacts", label: "Contatos", icon: Users },
-  { href: "/pipelines", label: "Pipelines", icon: GitBranch },
-  { href: "/equipe", label: "Equipe", icon: UsersRound, adminOnly: true },
-  { href: "/agents", label: "Agentes IA", icon: Bot, adminOnly: true },
-  { href: "/broadcasts", label: "Disparos", icon: Radio },
-  { href: "/automations", label: "Automações", icon: Zap },
-  { href: "/flows", label: "Fluxos", icon: Workflow, beta: true },
+  { href: "/dashboard",   label: "Painel",           icon: LayoutDashboard },
+  { href: "/inbox",       label: "Caixa de Entrada", icon: MessageSquare },
+  { href: "/contacts",   label: "Contatos",           icon: Users },
+  { href: "/pipelines",  label: "Pipelines",          icon: GitBranch },
+  { href: "/equipe",     label: "Equipe",             icon: UsersRound, adminOnly: true },
+  { href: "/broadcasts", label: "Disparos",           icon: Radio,      ownerOnly: true },
+  { href: "/automations",label: "Automações",         icon: Zap,        ownerOnly: true },
+  { href: "/agents",     label: "Agentes IA",         icon: Bot,        ownerOnly: true, beta: true },
+  { href: "/flows",      label: "Fluxos",             icon: Workflow,   ownerOnly: true, beta: true },
 ];
 
 const bottomNavItems: NavItem[] = [
@@ -136,12 +137,16 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
   // Filter nav items based on role.
   // While profile is loading, hide admin-only items to avoid a flash
   // where the full menu appears then shrinks once the role is known.
-  const visibleNavItems = navItems.filter(
-    (item) => !item.adminOnly || isAdmin(accountRole)
-  );
-  const visibleBottomItems = bottomNavItems.filter(
-    (item) => !item.adminOnly || isAdmin(accountRole)
-  );
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.ownerOnly) return accountRole === "owner";
+    if (item.adminOnly) return isAdmin(accountRole);
+    return true;
+  });
+  const visibleBottomItems = bottomNavItems.filter((item) => {
+    if (item.ownerOnly) return accountRole === "owner";
+    if (item.adminOnly) return isAdmin(accountRole);
+    return true;
+  });
 
   return (
     <>
@@ -249,6 +254,20 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
                 </li>
               );
             })}
+            <li>
+              <button
+                type="button"
+                onClick={toggleMode}
+                title={collapsed ? "Tema" : undefined}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white lg:py-2",
+                  collapsed && "lg:justify-center lg:px-0",
+                )}
+              >
+                {mode === "dark" ? <Moon className="h-4 w-4 shrink-0" /> : <Sun className="h-4 w-4 shrink-0" />}
+                <span className={cn(collapsed && "lg:hidden")}>Tema</span>
+              </button>
+            </li>
           </ul>
 
           <div className="my-4 border-t border-white/10" />
@@ -275,20 +294,6 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
                 </li>
               );
             })}
-            <li>
-              <button
-                type="button"
-                onClick={toggleMode}
-                title={collapsed ? "Tema" : undefined}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium text-white/60 transition-colors hover:bg-white/10 hover:text-white lg:py-2",
-                  collapsed && "lg:justify-center lg:px-0",
-                )}
-              >
-                {mode === "dark" ? <Moon className="h-4 w-4 shrink-0" /> : <Sun className="h-4 w-4 shrink-0" />}
-                <span className={cn(collapsed && "lg:hidden")}>Tema</span>
-              </button>
-            </li>
           </ul>
         </nav>
 
@@ -321,8 +326,12 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
               "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/10 focus:bg-white/10 focus:outline-none data-popup-open:bg-white/10",
               collapsed && "lg:justify-center lg:px-0",
             )}>
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-medium text-white">
-                {(profile?.full_name || profile?.email || "U").charAt(0).toUpperCase()}
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-medium text-white overflow-hidden">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt={profile.full_name ?? "avatar"} className="size-full object-cover" />
+                ) : (
+                  (profile?.full_name || profile?.email || "U").charAt(0).toUpperCase()
+                )}
               </div>
               <div className={cn("min-w-0 flex-1", collapsed && "lg:hidden")}>
                 <p className="truncate text-sm font-medium text-white">

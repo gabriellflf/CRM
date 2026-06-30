@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus } from "@/types";
@@ -64,6 +65,9 @@ export function ConversationList({
   onConversationsLoaded,
   resyncToken = 0,
 }: ConversationListProps) {
+  const { accountRole, user } = useAuth();
+  const isAdmin = accountRole === "admin" || accountRole === "owner";
+
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [operatorFilter, setOperatorFilter] = useState<string>("all");
@@ -159,6 +163,13 @@ export function ConversationList({
   const filtered = useMemo(() => {
     let result = conversations;
 
+    // Operators see only their own conversations + unassigned ones.
+    if (!isAdmin && user?.id) {
+      result = result.filter(
+        (c) => !c.assigned_agent_id || c.assigned_agent_id === user.id,
+      );
+    }
+
     if (filter === "unread") {
       result = result.filter((c) => c.unread_count > 0);
     } else if (filter !== "all") {
@@ -190,7 +201,7 @@ export function ConversationList({
     }
 
     return result;
-  }, [conversations, filter, operatorFilter, tagFilter, search]);
+  }, [conversations, filter, operatorFilter, tagFilter, search, isAdmin, user?.id]);
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -244,6 +255,7 @@ export function ConversationList({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {isAdmin && (
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(
               "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
@@ -273,6 +285,7 @@ export function ConversationList({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+          )}
 
           {allTags.length > 0 && (
             <DropdownMenu>
@@ -396,9 +409,28 @@ function ConversationItem({
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-base font-semibold text-foreground">
-            {displayName}
-          </span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="truncate text-base font-semibold text-foreground">
+              {displayName}
+            </span>
+            {/* Tags Badges */}
+            {((contact as any)?.contact_tags ?? []).slice(0, 2).map((ct: any) => {
+              const tag = Array.isArray(ct.tags) ? ct.tags[0] : ct.tags;
+              if (!tag) return null;
+              return (
+                <span
+                  key={tag.id}
+                  className="rounded-full px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap"
+                  style={{
+                    backgroundColor: `${tag.color}20`,
+                    color: tag.color,
+                  }}
+                >
+                  {tag.name}
+                </span>
+              );
+            })}
+          </div>
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-xs text-muted-foreground">{timeAgo}</span>
             {conversation.unread_count > 0 && (

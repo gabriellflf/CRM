@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GitBranch, Plus, ChevronDown, Settings } from "lucide-react";
+import { GitBranch, Plus, ChevronDown, Settings, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
@@ -57,6 +57,10 @@ export default function PipelinesPage() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Operator filter — admins/owners can view any operator's pipeline
+  const [operatorFilter, setOperatorFilter] = useState<string>("");
+  const [operators, setOperators] = useState<{ user_id: string; full_name: string }[]>([]);
+
   // Dialog / sheet state
   const [newPipelineOpen, setNewPipelineOpen] = useState(false);
   const [newPipelineName, setNewPipelineName] = useState("");
@@ -68,6 +72,21 @@ export default function PipelinesPage() {
   const [dealFormOpen, setDealFormOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [defaultStageId, setDefaultStageId] = useState<string>("");
+
+  // Load operators list for the filter dropdown (admins/owners only)
+  useEffect(() => {
+    if (accountRole !== 'admin' && accountRole !== 'owner') return;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      const { data: prof } = await supabase
+        .from('profiles').select('account_id').eq('user_id', session.user.id).maybeSingle();
+      if (!prof?.account_id) return;
+      const { data } = await supabase
+        .from('profiles').select('user_id, full_name').eq('account_id', prof.account_id).order('full_name');
+      setOperators(data ?? []);
+    })();
+  }, [supabase, accountRole]);
 
   // Guard against double-seeding (React StrictMode double-effect in dev).
   const seedAttempted = useRef(false);
@@ -106,15 +125,30 @@ export default function PipelinesPage() {
 
       const all = (data ?? []) as Deal[];
 
-      // Only filter after profile has loaded so we have the correct profiles.id.
-      // user.id is the auth UUID which differs from profiles.id stored in assigned_to.
-      if (!profileLoading && !isAdmin && profile?.id) {
-        return all.filter((d) => !d.assigned_to || d.assigned_to === profile.id);
+      // Determine which user's conversations to use as filter:
+      // - explicit operatorFilter → use that user
+      // - no filter + owner → no filter (see all)
+      // - no filter + admin/agent → use own user.id
+      if (!profileLoading && user?.id) {
+        const filterUserId = operatorFilter || (accountRole !== 'owner' ? user.id : null);
+        if (filterUserId) {
+          const { data: convs } = await supabase
+            .from("conversations")
+            .select("contact_id")
+            .eq("assigned_agent_id", filterUserId);
+
+          const assignedContactIds = new Set(
+            (convs ?? []).map((c: { contact_id: string }) => c.contact_id),
+          );
+          return all.filter(
+            (d) => d.contact_id && assignedContactIds.has(d.contact_id),
+          );
+        }
       }
 
       return all;
     },
-    [supabase, isAdmin, profileLoading, profile?.id],
+    [supabase, accountRole, profileLoading, user?.id, operatorFilter],
   );
 
   const seedDefaultPipeline = useCallback(async (): Promise<Pipeline | null> => {
@@ -375,6 +409,21 @@ export default function PipelinesPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {isAdmin && operators.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <select
+                value={operatorFilter}
+                onChange={(e) => setOperatorFilter(e.target.value)}
+                className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">{accountRole === 'owner' ? 'Todos' : 'Meus leads'}</option>
+                {operators.map((op) => (
+                  <option key={op.user_id} value={op.user_id}>{op.full_name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <GatedButton
             variant="outline"
             canAct={canEditSettings}

@@ -29,17 +29,20 @@ export default function SettingsPage() {
   const { mode } = useTheme();
 
   const isAdmin = accountRole === 'admin' || accountRole === 'owner';
+  const isOwner = accountRole === 'owner';
 
   const section = resolveSection(searchParams.get('tab'));
 
-  // Guard: if a non-admin lands on an admin-only section via direct URL,
-  // redirect silently to their profile.
+  // Guard: if a non-admin/non-owner lands on a restricted section via URL, redirect.
   useEffect(() => {
     if (profileLoading) return;
     if (!isAdmin && SECTION_META[section]?.adminOnly) {
       router.replace('/settings?tab=profile');
     }
-  }, [isAdmin, profileLoading, section, router]);
+    if (!isOwner && SECTION_META[section]?.ownerOnly) {
+      router.replace('/settings?tab=profile');
+    }
+  }, [isAdmin, isOwner, profileLoading, section, router]);
 
   const go = (next: SettingsSection) => {
     const params = new URLSearchParams(searchParams.toString());

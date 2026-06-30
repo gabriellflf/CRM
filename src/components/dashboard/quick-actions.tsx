@@ -1,13 +1,9 @@
 "use client"
 
 import Link from 'next/link'
-import { UserPlus, Briefcase, Radio, Zap } from 'lucide-react'
+import { UserPlus, Briefcase } from 'lucide-react'
 import type { ComponentType } from 'react'
 
-// Quick-action shortcuts. Each navigates to the page that owns the
-// relevant "create" flow. We deliberately don't try to auto-open any
-// modal on the target page — that'd require touching those pages,
-// which is out of scope here.
 interface Action {
   label: string
   href: string
@@ -16,15 +12,13 @@ interface Action {
 }
 
 const ACTIONS: Action[] = [
-  { label: 'Novo Contato', href: '/contacts', icon: UserPlus, tint: 'text-primary' },
-  { label: 'Novo Negócio', href: '/pipelines', icon: Briefcase, tint: 'text-blue-400' },
-  { label: 'Novo Disparo', href: '/broadcasts/new', icon: Radio, tint: 'text-amber-400' },
-  { label: 'Nova Automação', href: '/automations/new', icon: Zap, tint: 'text-primary' },
+  { label: 'Criar novo contato', href: '/contacts', icon: UserPlus, tint: 'text-primary' },
+  { label: 'Criar novo negócio', href: '/pipelines', icon: Briefcase, tint: 'text-blue-400' },
 ]
 
 export function QuickActions() {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3">
       {ACTIONS.map((a) => {
         const Icon = a.icon
         return (

@@ -24,6 +24,7 @@ export function SettingsRail({
   const { accountRole } = useAuth();
   const activeRef = useRef<HTMLButtonElement>(null);
   const isAdmin = accountRole === 'admin' || accountRole === 'owner';
+  const isOwner = accountRole === 'owner';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -49,6 +50,7 @@ export function SettingsRail({
           const meta = SECTION_META[s];
           if (meta.group !== group) return false;
           if (meta.adminOnly && !isAdmin) return false;
+          if (meta.ownerOnly && !isOwner) return false;
           return true;
         });
 

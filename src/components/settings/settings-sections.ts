@@ -36,6 +36,8 @@ export interface SectionMeta {
   group: 'top' | 'account' | 'workspace';
   /** When true, hidden from agents and viewers. */
   adminOnly?: boolean;
+  /** When true, hidden from everyone except the owner. */
+  ownerOnly?: boolean;
 }
 
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
@@ -43,12 +45,12 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   profile:     { id: 'profile',     label: 'Seu perfil',        icon: User,       group: 'account' },
   security:    { id: 'security',    label: 'Login e segurança', icon: Shield,     group: 'account' },
   appearance:  { id: 'appearance',  label: 'Aparência',         icon: Palette,    group: 'account' },
-  whatsapp:    { id: 'whatsapp',    label: 'WhatsApp',          icon: PlugZap,    group: 'workspace', adminOnly: true },
-  templates:   { id: 'templates',   label: 'Templates',         icon: FileText,   group: 'workspace', adminOnly: true },
-  fields:      { id: 'fields',      label: 'Campos e tags',     icon: Tags,       group: 'workspace', adminOnly: true },
-  deals:       { id: 'deals',       label: 'Negócios e moeda',  icon: Coins,      group: 'workspace', adminOnly: true },
+  whatsapp:    { id: 'whatsapp',    label: 'WhatsApp',          icon: PlugZap,    group: 'workspace' },
+  templates:   { id: 'templates',   label: 'Templates',         icon: FileText,   group: 'workspace' },
+  fields:      { id: 'fields',      label: 'Campos e tags',     icon: Tags,       group: 'workspace' },
+  deals:       { id: 'deals',       label: 'Negócios e moeda',  icon: Coins,      group: 'workspace' },
   members:     { id: 'members',     label: 'Membros da equipe', icon: UsersRound, group: 'workspace', adminOnly: true },
-  'ai-agents': { id: 'ai-agents',   label: 'Agentes IA',        icon: Bot,        group: 'workspace', adminOnly: true },
+  'ai-agents': { id: 'ai-agents',   label: 'Agentes IA',        icon: Bot,        group: 'workspace', ownerOnly: true },
 };
 
 export const RAIL_GROUPS: { label: string | null; group: SectionMeta['group'] }[] = [

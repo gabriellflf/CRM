@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { formatCurrency } from '@/lib/currency'
@@ -47,25 +46,19 @@ import { PipelineDonut } from '@/components/dashboard/pipeline-donut'
 import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
 import { MetricDetailModal } from '@/components/dashboard/metric-detail-modal'
+import { OperatorDashboard } from '@/components/dashboard/operator-dashboard'
 
 type RangeDays = 7 | 30 | 90
 interface Operator { user_id: string; full_name: string }
 
 export default function DashboardPage() {
-  const { defaultCurrency, accountRole, profileLoading } = useAuth()
-  const router = useRouter()
-
-  // Only admin and owner can view the dashboard.
-  // Any other role (agent, viewer, or null after load) goes to inbox.
-  useEffect(() => {
-    if (profileLoading) return
-    if (accountRole !== 'admin' && accountRole !== 'owner') {
-      router.replace('/inbox')
-    }
-  }, [accountRole, profileLoading, router])
+  const { defaultCurrency, accountRole, profileLoading, user } = useAuth()
+  const isAdmin = accountRole === 'admin' || accountRole === 'owner'
+  const isOwner = accountRole === 'owner'
 
   const [operators, setOperators] = useState<Operator[]>([])
-  const [operatorId, setOperatorId] = useState<string>('')
+  // null = not yet initialized (prevents a flash load with wrong filter)
+  const [operatorId, setOperatorId] = useState<string | null>(null)
 
   useEffect(() => {
     const db = createClient()
@@ -78,6 +71,12 @@ export default function DashboardPage() {
       setOperators((data ?? []) as Operator[])
     })()
   }, [])
+
+  // Initialize filter: admin → own data; owner → all
+  useEffect(() => {
+    if (profileLoading || operatorId !== null) return
+    setOperatorId(isOwner ? '' : (user?.id ?? ''))
+  }, [profileLoading, isOwner, user?.id, operatorId])
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
 
@@ -117,7 +116,7 @@ export default function DashboardPage() {
     setModalKind(kind)
     setModalLoading(true)
     const db = createClient()
-    const op = operatorId || undefined
+    const op = (operatorId ?? '') || undefined
     try {
       if (kind === 'conversations') setModalConversations(await loadActiveConversationsDetail(db, op))
       if (kind === 'contacts') setModalContacts(await loadNewContactsTodayDetail(db))
@@ -129,6 +128,7 @@ export default function DashboardPage() {
   }, [operatorId])
 
   const loadAll = useCallback(() => {
+    if (operatorId === null) return  // wait for initialization
     const db = createClient()
     const op = operatorId || undefined
 
@@ -177,13 +177,21 @@ export default function DashboardPage() {
       if (series[r] !== null) return
       setSeriesLoading(true)
       const db = createClient()
-      loadConversationsSeries(db, r, operatorId || undefined)
+      loadConversationsSeries(db, r, (operatorId ?? '') || undefined)
         .then((s) => setSeries((prev) => ({ ...prev, [r]: s })))
         .catch((err) => console.error('[dashboard] series failed:', err))
         .finally(() => setSeriesLoading(false))
     },
     [series, operatorId],
   )
+
+  if (profileLoading) return (
+    <div className="flex h-64 items-center justify-center">
+      <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+    </div>
+  )
+
+  if (!isAdmin) return <OperatorDashboard />
 
   return (
     <div className="space-y-5">
@@ -195,21 +203,26 @@ export default function DashboardPage() {
             Análise em tempo real de conversas, contatos, negócios, disparos e automações.
           </p>
         </div>
-        {operators.length > 0 && (
+        {isAdmin && operators.length > 0 && (
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />
             <select
-              value={operatorId}
+              value={operatorId ?? ''}
               onChange={(e) => {
                 setOperatorId(e.target.value)
                 setSeries({ 7: null, 30: null, 90: null })
               }}
               className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              <option value="">Todos os operadores</option>
-              {operators.map((op) => (
-                <option key={op.user_id} value={op.user_id}>{op.full_name}</option>
-              ))}
+              {isOwner
+                ? <option value="">Toda a equipe</option>
+                : <option value={user?.id ?? ''}>Meus dados</option>
+              }
+              {operators
+                .filter((op) => isOwner || op.user_id !== user?.id)
+                .map((op) => (
+                  <option key={op.user_id} value={op.user_id}>{op.full_name}</option>
+                ))}
             </select>
           </div>
         )}
